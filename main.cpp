@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
+#include <iostream>
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -30,6 +31,7 @@
 #include "Catalog.h"
 #include "Page.h"
 #include "PDFDoc.h"
+#include "Page.h"
 #include "PDFDocFactory.h"
 #include "TextOutputDev.h"
 #include "CharTypes.h"
@@ -164,6 +166,86 @@ static const ArgDesc argDesc[] = {
     {}
 };
 
+void print_node_info(Object* obj) {
+    switch (obj->getType()) {
+        case objBool:
+            std::cout << "Type: BOOL: " << (obj->getBool() ? "TRUE" : "FALSE") << std::endl;
+            break;
+        case objInt:
+            std::cout << "Type: INT: " << obj->getInt() << std::endl;
+            break;
+        case objReal:
+            std::cout << "Type: REAL " << obj->getReal() << std::endl;
+            break;
+        case objString:
+            std::cout << "Type: STRING " << obj->getString()->toStr() << std::endl;
+            break;
+        case objName:
+            std::cout << "Type: NAME: " << obj->getName() << std::endl;
+            break;
+        case objNull:
+            std::cout << "Type: NULL" << std::endl;
+            break;
+        case objArray: {
+                std::cout << "Type: ARRAY" << std::endl;
+                Array* arr = obj->getArray();
+                int array_length = arr->getLength();
+                for (int i = 0; i < array_length; ++i) {
+                    Object array_element = arr->get(i);
+                    print_node_info(&array_element);
+                }
+            }
+            break;
+        case objDict: {
+                std::cout << "Type: DICTIONARY" << std::endl;
+                Dict* dict = obj->getDict();
+                int dict_size = dict->getLength();
+                for (int i = 0; i < dict_size; ++i) {
+                    std::cout << "Key " << i << ": " << dict->getKey(i) << std::endl;
+                    std::cout << "Value " << i << ": " << std::endl;
+                    Object dictionary_value = dict->getVal(i);
+                    print_node_info(&dictionary_value);
+                }
+            }
+            break;
+        case objStream: {
+                Stream* stream = obj->getStream();
+                std::cout << "Type: STREAM, kind: " << stream->getKind() << std::endl;
+                if(stream->isBinary()) {
+                    std::cout << "Binary stream" << std::endl;
+//                    stream->getRawChars();
+                } else {
+                    std::cout << "Not binary stream" << std::endl;
+                }
+            }
+            break;
+        case objRef:
+            std::cout << "Type: INDIRECT REFERENCE: " << obj->getRefNum() << "-" << obj->getRefGen();
+            break;
+        case objCmd:
+            std::cout << "Type: COMMAND" << std::endl;
+            break;
+        case objError:
+            std::cout << "Type: ERROR" << std::endl;
+            break;
+        case objEOF:
+            std::cout << "Type: EOF" << std::endl;
+            break;
+        case objNone:
+            std::cout << "Type: NONE" << std::endl;
+            break;
+        case objInt64:
+            std::cout << "Type: INT64: " << obj->getInt64() << std::endl;
+            break;
+        case objDead:
+            std::cout << "Type: DEAD" << std::endl;
+            break;
+        default:
+            std::cout << "Type: UNKNOWN" << std::endl;
+            break;
+    }
+}
+
 int main(int argc, char* argv[]) {
     PDFDoc* doc;
     GooString* fileName;
@@ -182,29 +264,29 @@ int main(int argc, char* argv[]) {
     // parse args
     ok = parseArgs(argDesc, &argc, argv);
 
-    if(bboxLayout) {
+    if (bboxLayout) {
         bbox = gTrue;
     }
 
-    if(bbox) {
+    if (bbox) {
         htmlMeta = gTrue;
     }
 
-    if(!ok || (argc < 2 && !printEnc) || argc > 3 || printVersion || printHelp) {
+    if (!ok || (argc < 2 && !printEnc) || argc > 3 || printVersion || printHelp) {
         fprintf(stderr, "pdftotext version %s\n", PACKAGE_VERSION);
         fprintf(stderr, "%s\n", popplerCopyright);
         fprintf(stderr, "%s\n", xpdfCopyright);
-        if(!printVersion) {
+        if (!printVersion) {
             printUsage("pdftotext", "<PDF-file> [<text-file>]", argDesc);
         }
-        if(printVersion || printHelp)
+        if (printVersion || printHelp)
             exitCode = 0;
         goto err0;
     }
 
     // read config file
     globalParams = new GlobalParams();
-    if(printEnc) {
+    if (printEnc) {
         printEncodings();
         delete globalParams;
         exitCode = 0;
@@ -213,71 +295,71 @@ int main(int argc, char* argv[]) {
 
     fileName = new GooString(argv[1]);
 
-    if(fixedPitch) {
+    if (fixedPitch) {
         physLayout = gTrue;
     }
 
-    if(textEncName[0]) {
+    if (textEncName[0]) {
         globalParams->setTextEncoding(textEncName);
     }
 
-    if(textEOL[0]) {
-        if(!globalParams->setTextEOL(textEOL)) {
+    if (textEOL[0]) {
+        if (!globalParams->setTextEOL(textEOL)) {
             fprintf(stderr, "Bad '-eol' value on command line\n");
         }
     }
 
-    if(noPageBreaks) {
+    if (noPageBreaks) {
         globalParams->setTextPageBreaks(gFalse);
     }
 
-    if(quiet) {
+    if (quiet) {
         globalParams->setErrQuiet(quiet);
     }
 
     // get mapping to output encoding
-    if(!(uMap = globalParams->getTextEncoding())) {
+    if (!(uMap = globalParams->getTextEncoding())) {
         error(errCommandLine, -1, "Couldn't get text encoding");
         delete fileName;
         goto err1;
     }
 
     // open PDF file
-    if(ownerPassword[0] != '\001') {
+    if (ownerPassword[0] != '\001') {
         ownerPW = new GooString(ownerPassword);
     } else {
         ownerPW = nullptr;
     }
 
-    if(userPassword[0] != '\001') {
+    if (userPassword[0] != '\001') {
         userPW = new GooString(userPassword);
     } else {
         userPW = nullptr;
     }
 
-    if(fileName->cmp("-") == 0) {
+    if (fileName->cmp("-") == 0) {
         delete fileName;
         fileName = new GooString("fd://0");
     }
 
     doc = PDFDocFactory().createPDFDoc(*fileName, ownerPW, userPW);
 
-    if(userPW) {
+    if (userPW) {
         delete userPW;
     }
 
-    if(ownerPW) {
+    if (ownerPW) {
         delete ownerPW;
     }
 
-    if(!doc->isOk()) {
+    if (!doc->isOk()) {
         exitCode = 1;
         goto err2;
     }
 
 #ifdef ENFORCE_PERMISSIONS
     // check for copy permission
-    if(!doc->okToCopy()) {
+    if (!doc->okToCopy()) {
         error(errNotAllowed, -1, "Copying of text from this document is not allowed.");
         exitCode = 3;
         goto err2;
@@ -285,14 +367,14 @@ int main(int argc, char* argv[]) {
 #endif
 
     // construct text file name
-    if(argc == 3) {
+    if (argc == 3) {
         textFileName = new GooString(argv[2]);
-    } else if(fileName->cmp("fd://0") == 0) {
+    } else if (fileName->cmp("fd://0") == 0) {
         error(errCommandLine, -1, "You have to provide an output filename when reading form stdin.");
         goto err2;
     } else {
         p = fileName->getCString() + fileName->getLength() - 4;
-        if(!strcmp(p, ".pdf") || !strcmp(p, ".PDF")) {
+        if (!strcmp(p, ".pdf") || !strcmp(p, ".PDF")) {
             textFileName = new GooString(fileName->getCString(),
                                          fileName->getLength() - 4);
         } else {
@@ -302,19 +384,32 @@ int main(int argc, char* argv[]) {
     }
 
     // get page range
-    if(firstPage < 1) {
+    if (firstPage < 1) {
         firstPage = 1;
     }
 
-    if(lastPage < 1 || lastPage > doc->getNumPages()) {
+    if (lastPage < 1 || lastPage > doc->getNumPages()) {
         lastPage = doc->getNumPages();
     }
 
-    if(lastPage < firstPage) {
+    if (lastPage < firstPage) {
         error(errCommandLine, -1,
               "Wrong page range given: the first page ({0:d}) can not be after the last page ({1:d}).",
               firstPage, lastPage);
         goto err3;
+    }
+
+
+    for (int i = firstPage; i <= lastPage; ++i) {
+        std::cout << "Parsing page " << i << std::endl;
+        Page* page = doc->getPage(i);
+        PDFRectangle* media_box = page->getMediaBox();
+        std::cout  << media_box->x1 << ", " << media_box->y1 << ", " << media_box->x2 << ", " << media_box->y2 << std::endl;
+        print_node_info(page->getResourceDictObject());
+        std::cout << "----------------------------" << std::endl;
+        Object content = page->getContents();
+        print_node_info(&content);
+        break;
     }
 
     // finish success
