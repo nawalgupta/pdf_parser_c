@@ -18,8 +18,8 @@
 --indent-namespaces
 --min-conditional-indent=0
 
-
 --pad-oper
+--pad-header
 --unpad-paren
 
 
