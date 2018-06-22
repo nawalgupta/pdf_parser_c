@@ -5,6 +5,8 @@
  * owner password: the password to print, edit, extract, comment, ...
  * ctm: Current Transformation Matrix
  * gfx: Graphic
+ * To extract page in body of pages, specify -x, -y, -W, -H flag
+ *
  */
 
 #include <stdio.h>
@@ -15,7 +17,7 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
-
+#include <list>
 #include "config.h"
 #include "poppler-config.h"
 #include "utils/parseargs.h"
@@ -169,84 +171,26 @@ static const ArgDesc argDesc[] = {
     {}
 };
 
-void print_node_info(Object* obj) {
-    switch (obj->getType()) {
-        case objBool:
-            std::cout << "Type: BOOL: " << (obj->getBool() ? "TRUE" : "FALSE") << std::endl;
-            break;
-        case objInt:
-            std::cout << "Type: INT: " << obj->getInt() << std::endl;
-            break;
-        case objReal:
-            std::cout << "Type: REAL " << obj->getReal() << std::endl;
-            break;
-        case objString:
-            std::cout << "Type: STRING " << obj->getString()->toStr() << std::endl;
-            break;
-        case objName:
-            std::cout << "Type: NAME: " << obj->getName() << std::endl;
-            break;
-        case objNull:
-            std::cout << "Type: NULL" << std::endl;
-            break;
-        case objArray: {
-                std::cout << "Type: ARRAY" << std::endl;
-                Array* arr = obj->getArray();
-                int array_length = arr->getLength();
-                for (int i = 0; i < array_length; ++i) {
-                    Object array_element = arr->get(i);
-                    print_node_info(&array_element);
-                }
+struct TextBlockInformation {
+    bool has_title = false;
+    std::list<std::list<Unicode>> emphasized_words;
+    std::list<Unicode> partial_paragraph_content;
+};
+
+TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
+    TextBlockInformation* text_block_information = new TextBlockInformation;
+    for (TextLine* line = text_block->getLines(); line; line = line->getNext()) {
+        for (TextWord* word = line->getWords(); word; word = word->getNext()) {
+            // extract a partition of emphasized word from word
+            int word_length = word->getLength();
+            for (int i = 0; i < word_length; ++i) {
+                const Unicode* c = word->getChar(i);
+                text_block_information->partial_paragraph_content.push_back(*c);
+//                std::cout << word->getFontName(i)->toStr() << std::endl;
             }
-            break;
-        case objDict: {
-                std::cout << "Type: DICTIONARY" << std::endl;
-                Dict* dict = obj->getDict();
-                int dict_size = dict->getLength();
-                for (int i = 0; i < dict_size; ++i) {
-                    std::cout << "Key " << i << ": " << dict->getKey(i) << std::endl;
-                    std::cout << "Value " << i << ": " << std::endl;
-                    Object dictionary_value = dict->getVal(i);
-                    print_node_info(&dictionary_value);
-                }
-            }
-            break;
-        case objStream: {
-                Stream* stream = obj->getStream();
-                std::cout << "Type: STREAM, kind: " << stream->getKind() << std::endl;
-                if (stream->isBinary()) {
-                    std::cout << "Binary stream" << std::endl;
-//                    stream->getRawChars();
-                } else {
-                    std::cout << "Not binary stream" << std::endl;
-                }
-            }
-            break;
-        case objRef:
-            std::cout << "Type: INDIRECT REFERENCE: " << obj->getRefNum() << "-" << obj->getRefGen();
-            break;
-        case objCmd:
-            std::cout << "Type: COMMAND" << std::endl;
-            break;
-        case objError:
-            std::cout << "Type: ERROR" << std::endl;
-            break;
-        case objEOF:
-            std::cout << "Type: EOF" << std::endl;
-            break;
-        case objNone:
-            std::cout << "Type: NONE" << std::endl;
-            break;
-        case objInt64:
-            std::cout << "Type: INT64: " << obj->getInt64() << std::endl;
-            break;
-        case objDead:
-            std::cout << "Type: DEAD" << std::endl;
-            break;
-        default:
-            std::cout << "Type: UNKNOWN" << std::endl;
-            break;
+        }
     }
+    return text_block_information;
 }
 
 int main(int argc, char* argv[]) {
@@ -407,22 +351,34 @@ int main(int argc, char* argv[]) {
     if (textOut->isOk()) {
         for (int page = firstPage; page <= lastPage; ++page) {
             PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
-            std::cout << "Parsing page " << page << " " << page_mediabox->x1 << ", " << page_mediabox->y1 << ", " << page_mediabox->x2 << ", " << page_mediabox->y2 << std::endl;
-            doc->displayPage(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse);
+//            std::cout << "Parsing page " << page << " " << page_mediabox->x1 << ", " << page_mediabox->y1 << ", " << page_mediabox->x2 << ", " << page_mediabox->y2 << std::endl;
+            if ((w == 0) && (h == 0) && (x == 0) && (y == 0)) {
+                doc->displayPage(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse);
+            } else {
+                doc->displayPageSlice(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse, x, y, w, h);
+            }
+
             TextPage* textPage = textOut->takeText();
 
             for (TextFlow* flow = textPage->getFlows(); flow; flow = flow->getNext()) {
-                for (TextBlock* blk = flow->getBlocks(); blk; blk = blk->getNext()) {
-                    for (TextLine* line = blk->getLines(); line; line = line->getNext()) {
-                        for (TextWord* word = line->getWords(); word; word = word->getNext()) {
-                            std::cout << word->getText()->toStr() << " ";
-                        }
-                        std::cout << std::endl;
-                    }
+                for (TextBlock* text_block = flow->getBlocks(); text_block; text_block = text_block->getNext()) {
+                    TextBlockInformation* text_block_information = extract_text_block_information(text_block);
+
+
+                    delete text_block_information;
+//                    for (TextLine* line = text_block->getLines(); line; line = line->getNext()) {
+//                        for (TextWord* word = line->getWords(); word; word = word->getNext()) {
+//                            // extract a partition of emphasized word from word
+//                            int word_length = word->getLength();
+//                            for (int i = 0; i < word_length; ++i) {
+//                                std::cout << word->getFontName(i)->toStr() << std::endl;
+//                            }
+//                        }
+//                    }
                 }
             }
             textPage->decRefCnt();
-            //        break;
+            break;
         }
     } else {
         delete textOut;
