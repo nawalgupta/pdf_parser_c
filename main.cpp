@@ -171,29 +171,63 @@ static const ArgDesc argDesc[] = {
     {}
 };
 
+std::string UnicodeToUTF8(Unicode codepoint)
+{
+    std::string out;
+
+    if (codepoint <= 0x7f)
+        out.append(1, static_cast<char>(codepoint));
+    else if (codepoint <= 0x7ff)
+    {
+        out.append(1, static_cast<char>(0xc0 | ((codepoint >> 6) & 0x1f)));
+        out.append(1, static_cast<char>(0x80 | (codepoint & 0x3f)));
+    }
+    else if (codepoint <= 0xffff)
+    {
+        out.append(1, static_cast<char>(0xe0 | ((codepoint >> 12) & 0x0f)));
+        out.append(1, static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
+        out.append(1, static_cast<char>(0x80 | (codepoint & 0x3f)));
+    }
+    else
+    {
+        out.append(1, static_cast<char>(0xf0 | ((codepoint >> 18) & 0x07)));
+        out.append(1, static_cast<char>(0x80 | ((codepoint >> 12) & 0x3f)));
+        out.append(1, static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
+        out.append(1, static_cast<char>(0x80 | (codepoint & 0x3f)));
+    }
+    return out;
+}
+
 struct TextBlockInformation {
     bool has_title = false;
     std::list<std::list<Unicode>> emphasized_words;
-    std::list<Unicode> partial_paragraph_content;
+    std::string partial_paragraph_content;
 };
 
 TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
     TextBlockInformation* text_block_information = new TextBlockInformation;
+    std::stringstream partial_paragraph_content_string_stream;
     for (TextLine* line = text_block->getLines(); line; line = line->getNext()) {
         for (TextWord* word = line->getWords(); word; word = word->getNext()) {
             // extract a partition of emphasized word from word
             int word_length = word->getLength();
             for (int i = 0; i < word_length; ++i) {
-                const Unicode* c = word->getChar(i);
-                text_block_information->partial_paragraph_content.push_back(*c);
-//                std::cout << word->getFontName(i)->toStr() << std::endl;
+                partial_paragraph_content_string_stream << UnicodeToUTF8(*(word->getChar(i)));
             }
+            partial_paragraph_content_string_stream << u8" "; // utf-8 encoded space character
         }
     }
+    text_block_information->partial_paragraph_content = partial_paragraph_content_string_stream.str();
     return text_block_information;
 }
 
 int main(int argc, char* argv[]) {
+
+//    // Test UTF-8 encoded Unicode
+//    std::string s = UnicodeToUTF8(67222);
+//    std::cout << s << " " << s.length() << std::endl;
+//    exit(0);
+
     PDFDoc* doc;
     GooString* fileName;
     GooString* textFileName;
@@ -362,19 +396,10 @@ int main(int argc, char* argv[]) {
 
             for (TextFlow* flow = textPage->getFlows(); flow; flow = flow->getNext()) {
                 for (TextBlock* text_block = flow->getBlocks(); text_block; text_block = text_block->getNext()) {
+                    // must process text_block here as it'll expire after parsing page
                     TextBlockInformation* text_block_information = extract_text_block_information(text_block);
 
-
                     delete text_block_information;
-//                    for (TextLine* line = text_block->getLines(); line; line = line->getNext()) {
-//                        for (TextWord* word = line->getWords(); word; word = word->getNext()) {
-//                            // extract a partition of emphasized word from word
-//                            int word_length = word->getLength();
-//                            for (int i = 0; i < word_length; ++i) {
-//                                std::cout << word->getFontName(i)->toStr() << std::endl;
-//                            }
-//                        }
-//                    }
                 }
             }
             textPage->decRefCnt();
@@ -385,6 +410,7 @@ int main(int argc, char* argv[]) {
         exitCode = 2;
         goto err3;
     }
+
     delete textOut;
 
     // finish success
