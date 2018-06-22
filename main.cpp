@@ -19,6 +19,9 @@
 #include <iomanip>
 #include <list>
 #include <regex>
+#include <algorithm>
+#include <cctype>
+#include <locale>
 #include "config.h"
 #include "poppler-config.h"
 #include "utils/parseargs.h"
@@ -172,7 +175,46 @@ static const ArgDesc argDesc[] = {
     {}
 };
 
-std::string UnicodeToUTF8(Unicode codepoint) {
+
+// trim from start (in place)
+static inline void ltrim(std::string &s) {
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+        return !std::isspace(ch);
+    }));
+}
+
+// trim from end (in place)
+static inline void rtrim(std::string &s) {
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
+        return !std::isspace(ch);
+    }).base(), s.end());
+}
+
+// trim from both ends (in place)
+static inline void trim(std::string &s) {
+    ltrim(s);
+    rtrim(s);
+}
+
+// trim from start (copying)
+static inline std::string ltrim_copy(std::string s) {
+    ltrim(s);
+    return s;
+}
+
+// trim from end (copying)
+static inline std::string rtrim_copy(std::string s) {
+    rtrim(s);
+    return s;
+}
+
+// trim from both ends (copying)
+static inline std::string trim_copy(std::string s) {
+    trim(s);
+    return s;
+}
+
+static inline std::string UnicodeToUTF8(Unicode codepoint) {
     std::string out;
 
     if (codepoint <= 0x7f)
@@ -199,7 +241,7 @@ struct TextBlockInformation {
     std::string partial_paragraph_content;
 };
 
-TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
+static inline TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
     TextBlockInformation* text_block_information = new TextBlockInformation;
     std::stringstream partial_paragraph_content_string_stream;
     std::stringstream emphasized_word_string_stream;
@@ -222,10 +264,9 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
                     parsing_emphasized_word = true;
                     emphasized_word_string_stream << character;
                 } else if (parsing_emphasized_word) {
-                    // TODO: check stripped emphasized word, not emphasized word
-                    if (emphasized_word_string_stream.str().length() > 0) {
-                        // TODO: push stripped emphasized word, not emphasized word
-                        text_block_information->emphasized_words.push_back(emphasized_word_string_stream.str());
+                    std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
+                    if (trimmed_string.length() > 0) {
+                        text_block_information->emphasized_words.push_back(trimmed_string);
                     }
                     emphasized_word_string_stream.str(std::string());
                     parsing_emphasized_word = false;
@@ -244,10 +285,9 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
     text_block_information->partial_paragraph_content = partial_paragraph_content_string_stream.str();
 
     // if emphasized_word is in the end of partial_paragraph
-    // TODO: check stripped emphasized word, not emphasized word
-    if (parsing_emphasized_word && emphasized_word_string_stream.str().length() > 0) {
-        // TODO: push stripped emphasized word, not emphasized word
-        text_block_information->emphasized_words.push_back(emphasized_word_string_stream.str());
+    std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
+    if (parsing_emphasized_word && trimmed_string.length() > 0) {
+        text_block_information->emphasized_words.push_back(trimmed_string);
     }
 
     // test
