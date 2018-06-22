@@ -18,6 +18,7 @@
 #include <sstream>
 #include <iomanip>
 #include <list>
+#include <regex>
 #include "config.h"
 #include "poppler-config.h"
 #include "utils/parseargs.h"
@@ -171,25 +172,19 @@ static const ArgDesc argDesc[] = {
     {}
 };
 
-std::string UnicodeToUTF8(Unicode codepoint)
-{
+std::string UnicodeToUTF8(Unicode codepoint) {
     std::string out;
 
     if (codepoint <= 0x7f)
         out.append(1, static_cast<char>(codepoint));
-    else if (codepoint <= 0x7ff)
-    {
+    else if (codepoint <= 0x7ff) {
         out.append(1, static_cast<char>(0xc0 | ((codepoint >> 6) & 0x1f)));
         out.append(1, static_cast<char>(0x80 | (codepoint & 0x3f)));
-    }
-    else if (codepoint <= 0xffff)
-    {
+    } else if (codepoint <= 0xffff) {
         out.append(1, static_cast<char>(0xe0 | ((codepoint >> 12) & 0x0f)));
         out.append(1, static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
         out.append(1, static_cast<char>(0x80 | (codepoint & 0x3f)));
-    }
-    else
-    {
+    } else {
         out.append(1, static_cast<char>(0xf0 | ((codepoint >> 18) & 0x07)));
         out.append(1, static_cast<char>(0x80 | ((codepoint >> 12) & 0x3f)));
         out.append(1, static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
@@ -200,24 +195,59 @@ std::string UnicodeToUTF8(Unicode codepoint)
 
 struct TextBlockInformation {
     bool has_title = false;
-    std::list<std::list<Unicode>> emphasized_words;
+    std::list<std::string> emphasized_words;
     std::string partial_paragraph_content;
 };
 
 TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
     TextBlockInformation* text_block_information = new TextBlockInformation;
     std::stringstream partial_paragraph_content_string_stream;
+    std::stringstream emphasized_word_string_stream;
+    bool parsing_emphasized_word = false;
+    std::regex font_regex(".*([bB]old|[iI]talic).*");
+    std::smatch base_match; // string match
     for (TextLine* line = text_block->getLines(); line; line = line->getNext()) {
         for (TextWord* word = line->getWords(); word; word = word->getNext()) {
             // extract a partition of emphasized word from word
             int word_length = word->getLength();
             for (int i = 0; i < word_length; ++i) {
-                partial_paragraph_content_string_stream << UnicodeToUTF8(*(word->getChar(i)));
+                std::string character = UnicodeToUTF8(*(word->getChar(i)));
+
+                // add character to partial paragraph content
+                partial_paragraph_content_string_stream << character;
+
+                // process emphasized word
+                std::string font_name = word->getFontName(i)->toStr();
+                if (std::regex_match(font_name, base_match, font_regex)) {
+                    parsing_emphasized_word = true;
+                    emphasized_word_string_stream << character;
+                } else if (parsing_emphasized_word) {
+                    // TODO: check stripped emphasized word, not emphasized word
+                    if (emphasized_word_string_stream.str().length() > 0) {
+                        // TODO: push stripped emphasized word, not emphasized word
+                        text_block_information->emphasized_words.push_back(emphasized_word_string_stream.str());
+                    }
+                    emphasized_word_string_stream.clear();
+                    parsing_emphasized_word = false;
+                }
+            }
+            if (parsing_emphasized_word) {
+                emphasized_word_string_stream << u8" ";
             }
             partial_paragraph_content_string_stream << u8" "; // utf-8 encoded space character
         }
+        if (parsing_emphasized_word) {
+            emphasized_word_string_stream << u8" ";
+        }
+        partial_paragraph_content_string_stream << u8" "; // utf-8 encoded space character
     }
     text_block_information->partial_paragraph_content = partial_paragraph_content_string_stream.str();
+
+    // test
+    for (std::string emphasized_word : text_block_information->emphasized_words) {
+        std::cout << emphasized_word << std::endl;
+    }
+
     return text_block_information;
 }
 
