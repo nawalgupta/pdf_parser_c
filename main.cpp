@@ -1,9 +1,10 @@
 /*
  * Parse pdf file, write output to .json file using poppler
  * with one pdf file:
- * user password is the password to open/read pdf file
- * owner password is the password to print, edit, extract, comment, ...
- *
+ * user password: the password to open/read pdf file
+ * owner password: the password to print, edit, extract, comment, ...
+ * ctm: Current Transformation Matrix
+ * gfx: Graphic
  */
 
 #include <stdio.h>
@@ -37,6 +38,8 @@
 #include "CharTypes.h"
 #include "UnicodeMap.h"
 #include "PDFDocEncoding.h"
+#include "Parser.h"
+#include "Lexer.h"
 #include "Error.h"
 
 static int firstPage = 1;
@@ -211,7 +214,7 @@ void print_node_info(Object* obj) {
         case objStream: {
                 Stream* stream = obj->getStream();
                 std::cout << "Type: STREAM, kind: " << stream->getKind() << std::endl;
-                if(stream->isBinary()) {
+                if (stream->isBinary()) {
                     std::cout << "Binary stream" << std::endl;
 //                    stream->getRawChars();
                 } else {
@@ -399,18 +402,34 @@ int main(int argc, char* argv[]) {
         goto err3;
     }
 
+    textOut = new TextOutputDev(nullptr, physLayout, fixedPitch, rawOrder, htmlMeta);
 
-    for (int i = firstPage; i <= lastPage; ++i) {
-        std::cout << "Parsing page " << i << std::endl;
-        Page* page = doc->getPage(i);
-        PDFRectangle* media_box = page->getMediaBox();
-        std::cout  << media_box->x1 << ", " << media_box->y1 << ", " << media_box->x2 << ", " << media_box->y2 << std::endl;
-        print_node_info(page->getResourceDictObject());
-        std::cout << "----------------------------" << std::endl;
-        Object content = page->getContents();
-        print_node_info(&content);
-        break;
+    if (textOut->isOk()) {
+        for (int page = firstPage; page <= lastPage; ++page) {
+            PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
+            std::cout << "Parsing page " << page << " " << page_mediabox->x1 << ", " << page_mediabox->y1 << ", " << page_mediabox->x2 << ", " << page_mediabox->y2 << std::endl;
+            doc->displayPage(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse);
+            TextPage* textPage = textOut->takeText();
+
+            for (TextFlow* flow = textPage->getFlows(); flow; flow = flow->getNext()) {
+                for (TextBlock* blk = flow->getBlocks(); blk; blk = blk->getNext()) {
+                    for (TextLine* line = blk->getLines(); line; line = line->getNext()) {
+                        for (TextWord* word = line->getWords(); word; word = word->getNext()) {
+                            std::cout << word->getText()->toStr() << " ";
+                        }
+                        std::cout << std::endl;
+                    }
+                }
+            }
+            textPage->decRefCnt();
+            //        break;
+        }
+    } else {
+        delete textOut;
+        exitCode = 2;
+        goto err3;
     }
+    delete textOut;
 
     // finish success
     exitCode = 0;
