@@ -227,7 +227,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
                         // TODO: push stripped emphasized word, not emphasized word
                         text_block_information->emphasized_words.push_back(emphasized_word_string_stream.str());
                     }
-                    emphasized_word_string_stream.clear();
+                    emphasized_word_string_stream.str(std::string());
                     parsing_emphasized_word = false;
                 }
             }
@@ -243,10 +243,18 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
     }
     text_block_information->partial_paragraph_content = partial_paragraph_content_string_stream.str();
 
+    // if emphasized_word is in the end of partial_paragraph
+    // TODO: check stripped emphasized word, not emphasized word
+    if (parsing_emphasized_word && emphasized_word_string_stream.str().length() > 0) {
+        // TODO: push stripped emphasized word, not emphasized word
+        text_block_information->emphasized_words.push_back(emphasized_word_string_stream.str());
+    }
+
     // test
     for (std::string emphasized_word : text_block_information->emphasized_words) {
         std::cout << emphasized_word << std::endl;
     }
+    std::cout << text_block_information->partial_paragraph_content << std::endl;
 
     return text_block_information;
 }
