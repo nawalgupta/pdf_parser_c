@@ -10,7 +10,7 @@
 #define ENABLE_LIBOPENJPEG 1
 
 /* Build against libtiff. */
-/* #undef ENABLE_LIBTIFF */
+#define ENABLE_LIBTIFF 1
 
 /* Build against libpng. */
 #define ENABLE_LIBPNG 1
