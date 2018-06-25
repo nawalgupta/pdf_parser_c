@@ -35,12 +35,17 @@ Build project
 cd ..
 mkdir -p pdf_reader-build
 cd pdf_reader-build
-cmake ../pdf_reader
+cmake ../pdf_reader -DCMAKE_BUILD_TYPE=Release
 make
+sudo cp -v pdf_reader /usr/bin
 ```
 
 Run with 
 ```commandline
-cd ../pdf_reader-build
-LD_LIBRARY_PATH=/usr/local/lib64 ./pdf_reader -x 25 -y 35 -W 515 -H 752 file.pdf
+LD_LIBRARY_PATH=/usr/local/lib64 pdf_reader -x 25 -y 35 -W 515 -H 752 file.pdf
+```
+
+Or in Ubuntu (look at poppler install output for more detail
+```commandline
+LD_LIBRARY_PATH=/usr/local/lib pdf_reader -x 25 -y 35 -W 515 -H 752 file.pdf
 ```
