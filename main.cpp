@@ -320,9 +320,9 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
     std::smatch title_match_result;
     if (!text_block_information->emphasized_words.empty() && (
             std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^" + text_block_information->emphasized_words.front() + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[0-9]+(\.[0-9]+)*\.?\s" + text_block_information->emphasized_words.front() + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\([a-z]{1,4}\)\s" + text_block_information->emphasized_words.front() + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\*\+\-]\s" + text_block_information->emphasized_words.front() + ".*")) ||
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\d+(\\.\\d+)*\\.?\\s+" + text_block_information->emphasized_words.front() + ".*")) ||
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\([a-z]{1,4}\\)\\s+" + text_block_information->emphasized_words.front() + ".*")) ||
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\\*\\+\\-]\\s" + text_block_information->emphasized_words.front() + ".*")) ||
             std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + text_block_information->emphasized_words.front() + "\".*")))) {
         text_block_information->has_title = true;
     }
