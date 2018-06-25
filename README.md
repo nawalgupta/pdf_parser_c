@@ -2,7 +2,7 @@ This program extract pdf file, save data to json file to use later. It use poppl
 
 To checkout:
 ```commandline
-git clone --recursive https://github.com/robinson0812/pdf_parser_c
+git clone --recursive https://github.com/robinson0812/pdf_parser_c pdf_reader
 ```
 
 Due to bug [pdftotext only outputs first page content with -bbox-layout option](https://bugs.freedesktop.org/show_bug.cgi?id=93344), after checkout poppler submodule, apply patch to fix:
