@@ -302,30 +302,20 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
         text_block_information->emphasized_words.push_back(trimmed_string);
     }
 
-    // TODO: Add quoted strings to emphasized_words and remove duplicated elements in emphasized_words list
-//    std::regex quote_regex("\"([^\"]*)\"");
-//    std::smatch quote_regex_match;
-//    if (std::regex_search(text_block_information->partial_paragraph_content, quote_regex_match, quote_regex)) {
-//        std::smatch::iterator it = quote_regex_match.begin();
-//        std::cout << "Quoted strings: " << std::endl;
-//        while (it != quote_regex_match.end()) {
-//            std::string quoted_string = (*it).str().substr(1, (*it).str().length() - 2);
-//            std::cout << (*it).str() << " | " << quoted_string << std::endl;
-//            text_block_information->emphasized_words.push_back(quoted_string);
-//            ++it;
-//        }
-//        std::cout << "-----------------" << std::endl;
-//    }
+    std::regex special_characters {R"([-[\]{}()*+?.,\^$|#\s])"};
 
     std::smatch title_match_result;
     if (!text_block_information->emphasized_words.empty() && (
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^" + text_block_information->emphasized_words.front() + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\d+(\\.\\d+)*\\.?\\s+" + text_block_information->emphasized_words.front() + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\([a-z]{1,4}\\)\\s+" + text_block_information->emphasized_words.front() + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\\*\\+\\-]\\s" + text_block_information->emphasized_words.front() + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + text_block_information->emphasized_words.front() + "\".*")))) {
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, R"(\$&)") + ".*")) ||
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\d+(\\.\\d+)*\\.?\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, R"(\$&)") + ".*")) ||
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\([a-z]{1,4}\\)\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, R"(\$&)") + ".*")) ||
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\\*\\+\\-]\\s" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, R"(\$&)") + ".*")) ||
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, R"(\$&)") + "\".*")))) {
         text_block_information->has_title = true;
     }
+
+    // linhlt rule: if > 2 lines -> not a title
+
 
     return text_block_information;
 }
