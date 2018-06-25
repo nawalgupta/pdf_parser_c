@@ -1,4 +1,7 @@
+This program extract pdf file, save data to json file to use later. It use poppler as PDF parser.
+
 Due to bug [pdftotext only outputs first page content with -bbox-layout option](https://bugs.freedesktop.org/show_bug.cgi?id=93344), after checkout poppler submodule, apply patch to fix:
+
 
 ```commandline
 cd poppler
