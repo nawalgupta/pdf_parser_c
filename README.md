@@ -16,7 +16,23 @@ make test
 sudo make install
 ```
 
-Build project with poppler lib at /usr/local/lib64, run with 
+Copy poppler config header to source folder
 ```commandline
+cp -vf ../poppler-build/config.h poppler-header
+cp -vf ../poppler-build/poppler-config.h poppler-header
+```
+
+Build project
+```commandline
+cd ..
+mkdir -p pdf_reader-build
+cd pdf_reader-build
+cmake ../pdf_reader
+make
+```
+
+Run with 
+```commandline
+cd ../pdf_reader-build
 LD_LIBRARY_PATH=/usr/local/lib64 ./pdf_reader -x 25 -y 35 -W 515 -H 752 file.pdf
 ```
