@@ -481,7 +481,7 @@ int main(int argc, char* argv[]) {
                 }
             }
             textPage->decRefCnt();
-            break;
+//            break;
         }
     } else {
         delete textOut;

@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 project(pdf_reader)
 
 set(CMAKE_VERBOSE_MAKEFILE TRUE)
-set(POPPLER_SOURCE_DIRECTORY "/home/sonbn/Downloads/Cinnamon/poppler-bugfix")
+set(POPPLER_SOURCE_DIRECTORY "${CMAKE_SOURCE_DIR}/poppler")
 
 include_directories(${POPPLER_SOURCE_DIRECTORY} ${POPPLER_SOURCE_DIRECTORY}/poppler poppler-header)
 
