@@ -1,0 +1,6 @@
+[submodule "poppler"]
+	path = poppler
+	url = https://anongit.freedesktop.org/git/poppler/poppler.git
+[submodule "poppler-test"]
+	path = poppler-test
+	url = git://git.freedesktop.org/git/poppler/test
