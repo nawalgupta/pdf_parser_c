@@ -4,3 +4,6 @@
 [submodule "poppler-test"]
 	path = poppler-test
 	url = git://git.freedesktop.org/git/poppler/test
+[submodule "json"]
+	path = json
+	url = https://github.com/nlohmann/json.git

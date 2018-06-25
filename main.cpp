@@ -47,6 +47,7 @@
 #include "Parser.h"
 #include "Lexer.h"
 #include "Error.h"
+#include "nlohmann/json.hpp"
 
 static int firstPage = 1;
 static int lastPage = 0;
@@ -177,21 +178,21 @@ static const ArgDesc argDesc[] = {
 
 
 // trim from start (in place)
-static inline void ltrim(std::string &s) {
+static inline void ltrim(std::string& s) {
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
         return !std::isspace(ch);
     }));
 }
 
 // trim from end (in place)
-static inline void rtrim(std::string &s) {
+static inline void rtrim(std::string& s) {
     s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
         return !std::isspace(ch);
     }).base(), s.end());
 }
 
 // trim from both ends (in place)
-static inline void trim(std::string &s) {
+static inline void trim(std::string& s) {
     ltrim(s);
     rtrim(s);
 }
@@ -321,7 +322,7 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
             std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[0-9]+(\.[0-9]+)*\.?\s" + text_block_information->emphasized_words.front() + ".*")) ||
             std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\([a-z]{1,4}\)\s" + text_block_information->emphasized_words.front() + ".*")) ||
             std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\*\+\-]\s" + text_block_information->emphasized_words.front() + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + text_block_information->emphasized_words.front() + "\".*")) )) {
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + text_block_information->emphasized_words.front() + "\".*")))) {
         text_block_information->has_title = true;
     }
 
@@ -529,15 +530,24 @@ int main(int argc, char* argv[]) {
             pdf_document.sections.push_back(pdf_section);
         }
 
-        // DEBUG
-        for (PDFSection section: pdf_document.sections) {
-            std::cout << "\nTitle: " << section.title << std::endl;
-            std::cout << "Keywords: ";
-            for (std::string emphasized_word : section.emphasized_words) {
-                std::cout << emphasized_word << "  |  ";
-            }
-            std::cout << "\nContent: " << section.content << std::endl;
+//        // DEBUG
+//        for (PDFSection section: pdf_document.sections) {
+//            std::cout << "\nTitle: " << section.title << std::endl;
+//            std::cout << "Keywords: ";
+//            for (std::string emphasized_word : section.emphasized_words) {
+//                std::cout << emphasized_word << "  |  ";
+//            }
+//            std::cout << "\nContent: " << section.content << std::endl;
+//        }
+
+        // Save pdf_document to json file
+        nlohmann::json json_pdf_document;
+        for (PDFSection section : pdf_document.sections) {
+            nlohmann::json json_pdf_section;
+            json_pdf_section["title"] = section.title;
+            json_pdf_document.push_back(json_pdf_section);
         }
+        std::cout << json_pdf_document.dump(4) << std::endl;
 
     } else {
         delete textOut;
