@@ -241,13 +241,23 @@ struct TextBlockInformation {
     std::string partial_paragraph_content;
 };
 
+struct PDFSection {
+    std::string title;
+    std::string content;
+    std::list<std::string> emphasized_words;
+};
+
+struct PDFDocument {
+    std::list<PDFSection> sections;
+};
+
 static inline TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
     TextBlockInformation* text_block_information = new TextBlockInformation;
     std::stringstream partial_paragraph_content_string_stream;
     std::stringstream emphasized_word_string_stream;
     bool parsing_emphasized_word = false;
     std::regex font_regex(".*([bB]old|[iI]talic).*");
-    std::smatch base_match; // string match
+    std::smatch font_regex_match; // string match
     for (TextLine* line = text_block->getLines(); line; line = line->getNext()) {
         for (TextWord* word = line->getWords(); word; word = word->getNext()) {
             // extract a partition of emphasized word from word
@@ -260,7 +270,7 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
 
                 // process emphasized word
                 std::string font_name = word->getFontName(i)->toStr();
-                if (std::regex_match(font_name, base_match, font_regex)) {
+                if (std::regex_match(font_name, font_regex_match, font_regex)) {
                     parsing_emphasized_word = true;
                     emphasized_word_string_stream << character;
                 } else if (parsing_emphasized_word) {
@@ -290,22 +300,35 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
         text_block_information->emphasized_words.push_back(trimmed_string);
     }
 
-    // test
-    for (std::string emphasized_word : text_block_information->emphasized_words) {
-        std::cout << emphasized_word << std::endl;
+    // TODO: Add quoted strings to emphasized_words and remove duplicated elements in emphasized_words list
+//    std::regex quote_regex("\"([^\"]*)\"");
+//    std::smatch quote_regex_match;
+//    if (std::regex_search(text_block_information->partial_paragraph_content, quote_regex_match, quote_regex)) {
+//        std::smatch::iterator it = quote_regex_match.begin();
+//        std::cout << "Quoted strings: " << std::endl;
+//        while (it != quote_regex_match.end()) {
+//            std::string quoted_string = (*it).str().substr(1, (*it).str().length() - 2);
+//            std::cout << (*it).str() << " | " << quoted_string << std::endl;
+//            text_block_information->emphasized_words.push_back(quoted_string);
+//            ++it;
+//        }
+//        std::cout << "-----------------" << std::endl;
+//    }
+
+    std::smatch title_match_result;
+    if (!text_block_information->emphasized_words.empty() && (
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^" + text_block_information->emphasized_words.front() + ".*")) ||
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[0-9]+(\.[0-9]+)*\.?\s" + text_block_information->emphasized_words.front() + ".*")) ||
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\([a-z]{1,4}\)\s" + text_block_information->emphasized_words.front() + ".*")) ||
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\*\+\-]\s" + text_block_information->emphasized_words.front() + ".*")) ||
+            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + text_block_information->emphasized_words.front() + "\".*")) )) {
+        text_block_information->has_title = true;
     }
-    std::cout << text_block_information->partial_paragraph_content << std::endl;
 
     return text_block_information;
 }
 
 int main(int argc, char* argv[]) {
-
-//    // Test UTF-8 encoded Unicode
-//    std::string s = UnicodeToUTF8(67222);
-//    std::cout << s << " " << s.length() << std::endl;
-//    exit(0);
-
     PDFDoc* doc;
     GooString* fileName;
     GooString* textFileName;
@@ -461,6 +484,10 @@ int main(int argc, char* argv[]) {
     textOut = new TextOutputDev(nullptr, physLayout, fixedPitch, rawOrder, htmlMeta);
 
     if (textOut->isOk()) {
+
+        PDFDocument pdf_document;
+        PDFSection pdf_section;
+
         for (int page = firstPage; page <= lastPage; ++page) {
             PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
 //            std::cout << "Parsing page " << page << " " << page_mediabox->x1 << ", " << page_mediabox->y1 << ", " << page_mediabox->x2 << ", " << page_mediabox->y2 << std::endl;
@@ -477,12 +504,41 @@ int main(int argc, char* argv[]) {
                     // must process text_block here as it'll expire after parsing page
                     TextBlockInformation* text_block_information = extract_text_block_information(text_block);
 
+                    if (text_block_information->partial_paragraph_content.length() > 0) {
+                        if (text_block_information->has_title) {
+                            if (pdf_section.title.length() > 0) {
+                                pdf_document.sections.push_back(pdf_section);
+                            }
+
+                            pdf_section.title = text_block_information->emphasized_words.front();
+                            pdf_section.emphasized_words = text_block_information->emphasized_words;
+                            pdf_section.content = text_block_information->partial_paragraph_content;
+                        } else if (pdf_section.title.length() > 0) {
+                            pdf_section.emphasized_words.insert(pdf_section.emphasized_words.end(), text_block_information->emphasized_words.begin(), text_block_information->emphasized_words.end());
+                            pdf_section.content += text_block_information->partial_paragraph_content;
+                        }
+                    }
+
                     delete text_block_information;
                 }
             }
             textPage->decRefCnt();
-//            break;
         }
+
+        if (pdf_section.title.length() > 0) {
+            pdf_document.sections.push_back(pdf_section);
+        }
+
+        // DEBUG
+        for (PDFSection section: pdf_document.sections) {
+            std::cout << "\nTitle: " << section.title << std::endl;
+            std::cout << "Keywords: ";
+            for (std::string emphasized_word : section.emphasized_words) {
+                std::cout << emphasized_word << "  |  ";
+            }
+            std::cout << "\nContent: " << section.content << std::endl;
+        }
+
     } else {
         delete textOut;
         exitCode = 2;
