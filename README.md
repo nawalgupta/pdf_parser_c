@@ -9,7 +9,8 @@ Then build and verify poppler with command:
 ```commandline
 cd ..
 mkdir poppler-build
-cmake pdf_reader/poppler -DCMAKE_BUILD_TYPE=Release -DTESTDATADIR=pdf_reader/poppler-test
+cd poppler-build
+cmake ../pdf_reader/poppler -DCMAKE_BUILD_TYPE=Release -DTESTDATADIR=../pdf_reader/poppler-test
 make
 make test
 sudo make install
