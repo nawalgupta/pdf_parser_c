@@ -15,6 +15,7 @@
 #include <string.h>
 #include <iostream>
 #include <string>
+#include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <list>
@@ -545,9 +546,17 @@ int main(int argc, char* argv[]) {
         for (PDFSection section : pdf_document.sections) {
             nlohmann::json json_pdf_section;
             json_pdf_section["title"] = section.title;
+            json_pdf_section["content"] = section.content;
+            for (std::string emphasized_word : section.emphasized_words) {
+                json_pdf_section["keywords"] += emphasized_word;
+            }
             json_pdf_document.push_back(json_pdf_section);
         }
-        std::cout << json_pdf_document.dump(4) << std::endl;
+
+        std::cout << "Writing out file to: " << fileName->toStr() + ".json" << std::endl;
+        std::ofstream pdf_document_json_file(fileName->toStr() + ".json");
+        pdf_document_json_file << json_pdf_document.dump(4);
+        pdf_document_json_file.close();
 
     } else {
         delete textOut;
