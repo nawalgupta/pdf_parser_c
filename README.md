@@ -1,5 +1,8 @@
 This program extract pdf file, save data to json file to use later. It use poppler as PDF parser.
 
+**Following steps of setup instructions is for reference, adjust yourself with _your Linux distro_ and folder structure.**
+
+
 To checkout:
 ```commandline
 git clone --recursive https://github.com/robinson0812/pdf_parser_c pdf_reader
@@ -45,7 +48,7 @@ Run with
 LD_LIBRARY_PATH=/usr/local/lib64 pdf_reader -x 25 -y 35 -W 515 -H 752 file.pdf
 ```
 
-Or in Ubuntu (look at poppler install output for more detail
+Or in Ubuntu (look at poppler install output for more detail)
 ```commandline
 LD_LIBRARY_PATH=/usr/local/lib pdf_reader -x 25 -y 35 -W 515 -H 752 file.pdf
 ```
