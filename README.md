@@ -1,6 +1,6 @@
 This program extract pdf file, save data to json file to use later. It use poppler as PDF parser.
 
-**Following steps of setup instructions is for reference, adjust yourself with _your Linux distro_ and folder structure.**
+**Following steps of setup instructions is for reference, adjust yourself with _your Linux distro_ and folder structure to not mess up the source code directory.**
 
 
 To checkout:
