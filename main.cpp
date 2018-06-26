@@ -6,7 +6,7 @@
  * ctm: Current Transformation Matrix
  * gfx: Graphic
  * To extract page in body of pages, specify -x, -y, -W, -H flag
- *
+ * To set title max length, specify -L flag
  */
 
 #include <stdio.h>
@@ -50,6 +50,7 @@
 #include "Error.h"
 #include "nlohmann/json.hpp"
 
+static int titleMaxLength = 100;
 static int firstPage = 1;
 static int lastPage = 0;
 static double resolution = 72.0;
@@ -74,6 +75,10 @@ static GBool printHelp = gFalse;
 static GBool printEnc = gFalse;
 
 static const ArgDesc argDesc[] = {
+    {
+        "-L",       argInt,      &titleMaxLength, 0,
+        "title max length"
+    },
     {
         "-f",       argInt,      &firstPage,     0,
         "first page to convert"
@@ -173,8 +178,7 @@ static const ArgDesc argDesc[] = {
     {
         "-?",       argFlag,     &printHelp,     0,
         "print usage information"
-    },
-    {}
+    }
 };
 
 
@@ -314,8 +318,10 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
         text_block_information->has_title = true;
     }
 
-    // linhlt rule: if > 2 lines -> not a title
-
+    // linhlt rule: if title length > titleMaxLength -> not a title
+    if (text_block_information->has_title && text_block_information->emphasized_words.front().length() > titleMaxLength) {
+        text_block_information->has_title = false;
+    }
 
     return text_block_information;
 }
