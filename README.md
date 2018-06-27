@@ -18,6 +18,7 @@ git apply ../0001-Remove-ActualText-class-and-fix-reference-count.patch
 
 Then build and verify poppler with command:
 ```commandline
+sudo apt install libfreetype6-dev libfontconfig1-dev libnss3-dev libjpeg-dev libopenjp2-7-dev
 cd ..
 mkdir poppler-build
 cd poppler-build
