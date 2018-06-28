@@ -242,6 +242,7 @@ static inline std::string UnicodeToUTF8(Unicode codepoint) {
 }
 
 struct TextBlockInformation {
+    bool is_page_number = false;
     bool has_title = false;
     std::list<std::string> emphasized_words;
     std::string partial_paragraph_content;
@@ -259,73 +260,84 @@ struct PDFDocument {
 
 static inline TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
     TextBlockInformation* text_block_information = new TextBlockInformation;
-    std::stringstream partial_paragraph_content_string_stream;
-    std::stringstream emphasized_word_string_stream;
-    bool parsing_emphasized_word = false;
-    std::regex font_regex(".*([bB]old|[iI]talic).*");
-    std::smatch font_regex_match; // string match
-    for (TextLine* line = text_block->getLines(); line; line = line->getNext()) {
-        for (TextWord* word = line->getWords(); word; word = word->getNext()) {
-            // extract a partition of emphasized word from word
-            int word_length = word->getLength();
-            for (int i = 0; i < word_length; ++i) {
-                std::string character = UnicodeToUTF8(*(word->getChar(i)));
 
-                // add character to partial paragraph content
-                partial_paragraph_content_string_stream << character;
+    // check if text block is page number
+    double xMinA, xMaxA, yMinA, yMaxA;
+    text_block->getBBox(&xMinA, &yMinA, &xMaxA, &yMaxA);
 
-                // process emphasized word
-                std::string font_name = word->getFontName(i)->toStr();
-                if (std::regex_match(font_name, font_regex_match, font_regex)) {
-                    parsing_emphasized_word = true;
-                    emphasized_word_string_stream << character;
-                } else if (parsing_emphasized_word) {
-                    std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
-                    if (trimmed_string.length() > 0) {
-                        text_block_information->emphasized_words.push_back(trimmed_string);
+    if (yMaxA <= y || yMinA >= y + w) {
+        text_block_information->is_page_number = true;
+    } else {
+
+        std::stringstream partial_paragraph_content_string_stream;
+        std::stringstream emphasized_word_string_stream;
+        bool parsing_emphasized_word = false;
+        std::regex font_regex(".*([bB]old|[iI]talic).*");
+        std::smatch font_regex_match; // string match
+        for (TextLine* line = text_block->getLines(); line; line = line->getNext()) {
+            for (TextWord* word = line->getWords(); word; word = word->getNext()) {
+                // extract a partition of emphasized word from word
+                int word_length = word->getLength();
+                for (int i = 0; i < word_length; ++i) {
+                    std::string character = UnicodeToUTF8(*(word->getChar(i)));
+
+                    // add character to partial paragraph content
+                    partial_paragraph_content_string_stream << character;
+
+                    // process emphasized word
+                    std::string font_name = word->getFontName(i)->toStr();
+                    if (std::regex_match(font_name, font_regex_match, font_regex)) {
+                        parsing_emphasized_word = true;
+                        emphasized_word_string_stream << character;
+                    } else if (parsing_emphasized_word) {
+                        std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
+                        if (trimmed_string.length() > 0) {
+                            text_block_information->emphasized_words.push_back(trimmed_string);
+                        }
+                        emphasized_word_string_stream.str(std::string());
+                        parsing_emphasized_word = false;
                     }
-                    emphasized_word_string_stream.str(std::string());
-                    parsing_emphasized_word = false;
                 }
+                if (parsing_emphasized_word) {
+                    emphasized_word_string_stream << u8" ";
+                }
+                partial_paragraph_content_string_stream << u8" "; // utf-8 encoded space character
             }
             if (parsing_emphasized_word) {
                 emphasized_word_string_stream << u8" ";
             }
             partial_paragraph_content_string_stream << u8" "; // utf-8 encoded space character
         }
-        if (parsing_emphasized_word) {
-            emphasized_word_string_stream << u8" ";
+        text_block_information->partial_paragraph_content = partial_paragraph_content_string_stream.str();
+
+        // if emphasized_word is in the end of partial_paragraph
+        std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
+        if (parsing_emphasized_word && trimmed_string.length() > 0) {
+            text_block_information->emphasized_words.push_back(trimmed_string);
         }
-        partial_paragraph_content_string_stream << u8" "; // utf-8 encoded space character
-    }
-    text_block_information->partial_paragraph_content = partial_paragraph_content_string_stream.str();
 
-    // if emphasized_word is in the end of partial_paragraph
-    std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
-    if (parsing_emphasized_word && trimmed_string.length() > 0) {
-        text_block_information->emphasized_words.push_back(trimmed_string);
-    }
+        std::regex special_characters {R"([-[\]{}()*+?.,\^$|#\s])"};
+        std::string replace_rule(R"(\$&)");
 
-    std::regex special_characters {R"([-[\]{}()*+?.,\^$|#\s])"};
-    std::string replace_rule(R"(\$&)");
+        std::smatch title_match_result;
+        if (!text_block_information->emphasized_words.empty() && (
+                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
+                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\d+(\\.\\d+)*\\.?\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
+                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\([a-z]{1,4}\\)\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
+                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\\*\\+\\-]\\s" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
+                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + "\".*")))) {
+            text_block_information->has_title = true;
+        }
 
-    std::smatch title_match_result;
-    if (!text_block_information->emphasized_words.empty() && (
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\d+(\\.\\d+)*\\.?\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\([a-z]{1,4}\\)\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\\*\\+\\-]\\s" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + "\".*")))) {
-        text_block_information->has_title = true;
-    }
-
-    // linhlt rule: if title length > titleMaxLength -> not a title
-    if (text_block_information->has_title && text_block_information->emphasized_words.front().length() > titleMaxLength) {
-        text_block_information->has_title = false;
+        // linhlt rule: if title length > titleMaxLength -> not a title
+        if (text_block_information->has_title && text_block_information->emphasized_words.front().length() > titleMaxLength) {
+            text_block_information->has_title = false;
+        }
     }
 
     return text_block_information;
 }
+
 
 int main(int argc, char* argv[]) {
     PDFDoc* doc;
@@ -489,39 +501,53 @@ int main(int argc, char* argv[]) {
 
         for (int page = firstPage; page <= lastPage; ++page) {
             PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
-//            std::cout << "Parsing page " << page << " " << page_mediabox->x1 << ", " << page_mediabox->y1 << ", " << page_mediabox->x2 << ", " << page_mediabox->y2 << std::endl;
-            if ((w == 0) && (h == 0) && (x == 0) && (y == 0)) {
-                doc->displayPage(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse);
-            } else {
-                doc->displayPageSlice(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse, x, y, w, h);
-            }
+            doc->displayPage(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse);
 
             TextPage* textPage = textOut->takeText();
+            bool include_page = false;
+            std::list<TextBlockInformation*> text_block_information_list;
 
             for (TextFlow* flow = textPage->getFlows(); flow; flow = flow->getNext()) {
                 for (TextBlock* text_block = flow->getBlocks(); text_block; text_block = text_block->getNext()) {
                     // must process text_block here as it'll expire after parsing page
                     TextBlockInformation* text_block_information = extract_text_block_information(text_block);
+                    text_block_information_list.push_back(text_block_information);
 
-                    if (text_block_information->partial_paragraph_content.length() > 0) {
-                        if (text_block_information->has_title) {
-                            if (pdf_section.title.length() > 0) {
-                                pdf_document.sections.push_back(pdf_section);
-                            }
-
-                            pdf_section.title = text_block_information->emphasized_words.front();
-                            pdf_section.emphasized_words = text_block_information->emphasized_words;
-                            pdf_section.content = text_block_information->partial_paragraph_content;
-                        } else if (pdf_section.title.length() > 0) {
-                            pdf_section.emphasized_words.insert(pdf_section.emphasized_words.end(), text_block_information->emphasized_words.begin(), text_block_information->emphasized_words.end());
-                            pdf_section.content += text_block_information->partial_paragraph_content;
-                        }
+                    // if atleast 1 text block is page number block
+                    if (text_block_information->is_page_number) {
+                        include_page = true;
                     }
-
-                    delete text_block_information;
                 }
             }
             textPage->decRefCnt();
+
+            // if exist page number block
+            if (include_page) {
+                for (TextBlockInformation* text_block_information : text_block_information_list) {
+                    // only add blocks that is not page number
+                    if (!(text_block_information->is_page_number)) {
+                        if (text_block_information->partial_paragraph_content.length() > 0) {
+                            if (text_block_information->has_title) {
+                                if (pdf_section.title.length() > 0) {
+                                    pdf_document.sections.push_back(pdf_section);
+                                }
+
+                                pdf_section.title = text_block_information->emphasized_words.front();
+                                pdf_section.emphasized_words = text_block_information->emphasized_words;
+                                pdf_section.content = text_block_information->partial_paragraph_content;
+                            } else if (pdf_section.title.length() > 0) {
+                                pdf_section.emphasized_words.insert(pdf_section.emphasized_words.end(), text_block_information->emphasized_words.begin(), text_block_information->emphasized_words.end());
+                                pdf_section.content += text_block_information->partial_paragraph_content;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // cleanup
+            for (TextBlockInformation* text_block_information : text_block_information_list) {
+                delete text_block_information;
+            }
         }
 
         if (pdf_section.title.length() > 0) {
