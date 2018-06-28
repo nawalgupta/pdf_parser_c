@@ -50,6 +50,7 @@
 #include "Error.h"
 #include "nlohmann/json.hpp"
 
+static int page_footer_height = 60.0;
 static int titleMaxLength = 100;
 static int firstPage = 1;
 static int lastPage = 0;
@@ -90,6 +91,10 @@ static const ArgDesc argDesc[] = {
     {
         "-r",      argFP,       &resolution,    0,
         "resolution, in DPI (default is 72)"
+    },
+    {
+        "-pfh", argFP, &page_footer_height, 0,
+        "page footer height"
     },
     {
         "-x",      argInt,      &x,             0,
@@ -258,15 +263,15 @@ struct PDFDocument {
     std::list<PDFSection> sections;
 };
 
-static inline TextBlockInformation* extract_text_block_information(TextBlock* text_block) {
+static inline TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool analyze_page_number, double y0) {
     TextBlockInformation* text_block_information = new TextBlockInformation;
 
     // check if text block is page number
     double xMinA, xMaxA, yMinA, yMaxA;
     text_block->getBBox(&xMinA, &yMinA, &xMaxA, &yMaxA);
-    std::regex page_number_regex("^[0-9]+$");
+    std::regex page_number_regex("^.{0,2}[0-9]+.{0,2}");
     std::smatch page_number_regex_match;
-    if (yMaxA <= y || yMinA >= y + h) {
+    if (analyze_page_number && yMinA >= y0) {
         if (text_block->getLineCount() == 1) {  // page number is in 1 line only
             TextLine* line = text_block->getLines();
             std::string line_string;
@@ -276,6 +281,7 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
             line_string.pop_back();
             if (std::regex_match(line_string, page_number_regex_match, page_number_regex)) {
                 text_block_information->is_page_number = true;
+//                std::cout << "Document page number: " << line_string << std::endl;
             }
         }
     } else {
@@ -512,32 +518,35 @@ int main(int argc, char* argv[]) {
         PDFDocument pdf_document;
         PDFSection pdf_section;
 
+        bool start_parse = false;
+
         for (int page = firstPage; page <= lastPage; ++page) {
 
-//            PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
+            PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
 //            std::cout << "Page " << page << ": " << page_mediabox->y1 << " | " << page_mediabox->y2 << std::endl;
+            double y0 = page_mediabox->y2 - page_footer_height;
+
             doc->displayPage(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse);
 
             TextPage* textPage = textOut->takeText();
-            bool include_page = false;
             std::list<TextBlockInformation*> text_block_information_list;
 
             for (TextFlow* flow = textPage->getFlows(); flow; flow = flow->getNext()) {
                 for (TextBlock* text_block = flow->getBlocks(); text_block; text_block = text_block->getNext()) {
                     // must process text_block here as it'll expire after parsing page
-                    TextBlockInformation* text_block_information = extract_text_block_information(text_block);
+                    TextBlockInformation* text_block_information = extract_text_block_information(text_block, !start_parse, y0);
                     text_block_information_list.push_back(text_block_information);
 
                     // if atleast 1 text block is page number block
                     if (text_block_information->is_page_number) {
-                        include_page = true;
+                        start_parse = true; // first page that have page number
                     }
                 }
             }
             textPage->decRefCnt();
 
-            // if exist page number block
-            if (include_page) {
+            // after first page which has page number
+            if (start_parse) {
                 for (TextBlockInformation* text_block_information : text_block_information_list) {
                     // only add blocks that is not page number
                     if (!(text_block_information->is_page_number)) {
