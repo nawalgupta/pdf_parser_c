@@ -265,7 +265,7 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
     double xMinA, xMaxA, yMinA, yMaxA;
     text_block->getBBox(&xMinA, &yMinA, &xMaxA, &yMaxA);
 
-    if (yMaxA <= y || yMinA >= y + w) {
+    if (yMaxA <= y || yMinA >= y + h) {
         text_block_information->is_page_number = true;
     } else {
 
