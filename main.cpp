@@ -264,11 +264,21 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
     // check if text block is page number
     double xMinA, xMaxA, yMinA, yMaxA;
     text_block->getBBox(&xMinA, &yMinA, &xMaxA, &yMaxA);
-
+    std::regex page_number_regex("^[0-9]+$");
+    std::smatch page_number_regex_match;
     if (yMaxA <= y || yMinA >= y + h) {
-        text_block_information->is_page_number = true;
+        if (text_block->getLineCount() == 1) {  // page number is in 1 line only
+            TextLine* line = text_block->getLines();
+            std::string line_string;
+            for (TextWord* word = line->getWords(); word; word = word->getNext()) {
+                line_string += word->getText()->toStr() + " ";
+            }
+            line_string.pop_back();
+            if (std::regex_match(line_string, page_number_regex_match, page_number_regex)) {
+                text_block_information->is_page_number = true;
+            }
+        }
     } else {
-
         std::stringstream partial_paragraph_content_string_stream;
         std::stringstream emphasized_word_string_stream;
         bool parsing_emphasized_word = false;
@@ -334,6 +344,9 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
             text_block_information->has_title = false;
         }
     }
+
+
+//    std::cout << y << " | " << (y + h) <<  " | " << yMinA << " | " << yMaxA <<  " | " << xMinA << " | " << xMaxA << " | " << text_block_information->is_page_number << std::endl;
 
     return text_block_information;
 }
@@ -500,7 +513,9 @@ int main(int argc, char* argv[]) {
         PDFSection pdf_section;
 
         for (int page = firstPage; page <= lastPage; ++page) {
-            PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
+
+//            PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
+//            std::cout << "Page " << page << ": " << page_mediabox->y1 << " | " << page_mediabox->y2 << std::endl;
             doc->displayPage(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse);
 
             TextPage* textPage = textOut->takeText();
