@@ -22,9 +22,14 @@ sudo apt install libfreetype6-dev libfontconfig1-dev libnss3-dev libjpeg-dev lib
 cd ..
 mkdir poppler-build
 cd poppler-build
-cmake ../pdf_reader/poppler -DCMAKE_BUILD_TYPE=Release -DTESTDATADIR=../pdf_reader/poppler-test -DPOPPLER_DATADIR=../../pdf_reader/poppler-data
+cmake ../pdf_reader/poppler -DCMAKE_BUILD_TYPE=Release -DTESTDATADIR=../pdf_reader/poppler-test
 make
 make test
+sudo make install
+cd ..
+mkdir poppler-data-build
+cmake ../pdf_reader/poppler-data
+make
 sudo make install
 ```
 
