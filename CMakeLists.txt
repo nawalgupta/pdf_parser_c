@@ -6,10 +6,13 @@ set(CMAKE_VERBOSE_MAKEFILE TRUE)
 set(POPPLER_SOURCE_DIRECTORY "${CMAKE_SOURCE_DIR}/poppler")
 set(NLOHMANN_JSON_SOURCE_DIRECTORY "${CMAKE_SOURCE_DIR}/json")
 
+find_package(cpprestsdk REQUIRED)
+
 include_directories(${POPPLER_SOURCE_DIRECTORY}
     ${POPPLER_SOURCE_DIRECTORY}/poppler
     ${NLOHMANN_JSON_SOURCE_DIRECTORY}/include
     ${CMAKE_SOURCE_DIR}/poppler-header)
 
 add_executable(${PROJECT_NAME} "main.cpp" "parseargs.cc" "printencodings.cc" "Win32Console.cc")
-target_link_libraries(${PROJECT_NAME} poppler)
+target_link_libraries(${PROJECT_NAME} PRIVATE poppler)
+target_link_libraries(${PROJECT_NAME} PRIVATE cpprestsdk::cpprest)
