@@ -44,7 +44,7 @@ Build project
 cd ..
 mkdir -p pdf_reader-build
 cd pdf_reader-build
-cmake ../pdf_reader -DCMAKE_BUILD_TYPE=Release
+cmake ../pdf_reader -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
 make
 sudo cp -v pdf_reader /usr/bin
 ```
