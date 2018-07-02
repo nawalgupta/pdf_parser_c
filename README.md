@@ -22,7 +22,7 @@ sudo apt install libfreetype6-dev libfontconfig1-dev libnss3-dev libjpeg-dev lib
 cd ..
 mkdir poppler-build
 cd poppler-build
-cmake ../pdf_reader/poppler -DCMAKE_BUILD_TYPE=Release -DTESTDATADIR=../pdf_reader/poppler-test
+cmake ../pdf_reader/poppler -DCMAKE_BUILD_TYPE=Release -DTESTDATADIR=../pdf_reader/poppler-test -DENABLE_XPDF_HEADERS=ON
 make
 make test
 sudo make install
