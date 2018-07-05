@@ -167,7 +167,9 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
             TextLine* line = text_block->getLines();
             std::string line_string;
             for (TextWord* word = line->getWords(); word; word = word->getNext()) {
-                line_string += word->getText()->toStr() + " ";
+                GooString *text_word = word->getText();
+                line_string += text_word->toStr() + " ";
+                delete text_word;
             }
             line_string.pop_back();
             if (std::regex_match(line_string, page_number_regex_match, page_number_regex)) {
