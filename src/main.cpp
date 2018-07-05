@@ -48,7 +48,7 @@
 #include "parseargs.hpp"
 
 static int titleMaxLength = 100;
-static int page_footer_height = 60.0;
+static int pageFooterHeight = 60.0;
 static char ownerPassword[33] = "\001";
 static char userPassword[33] = "\001";
 static double resolution = 72.0;
@@ -59,7 +59,7 @@ static const ArgDesc argDesc[] = {
         "title max length"
     },
     {
-        "-pfh",     argFP,       &page_footer_height, 0,
+        "-pfh",     argFP,       &pageFooterHeight, 0,
         "page footer height"
     },
     {
@@ -287,41 +287,46 @@ PDFDoc* open_pdf_document(char *file_name) {
 int main(int argc, char* argv[]) {
     PDFDoc* doc;
     TextOutputDev* textOut;
-    UnicodeMap* uMap;
 
     // parse args
-    if (parseArgs(argDesc, &argc, argv)) {
+    if (argc > 1 && parseArgs(argDesc, &argc, argv)) {
         doc = open_pdf_document(argv[1]);
     } else {
         return EXIT_FAILURE;
     }
 
+    // create text output device
     if (doc->isOk()) {
-        globalParams = new GlobalParams();
-        globalParams->setTextPageBreaks(gTrue);
-        globalParams->setErrQuiet(gFalse);
-
-        textOut = new TextOutputDev(nullptr, gTrue, 0.0, gTrue, gFalse);
+        textOut = new TextOutputDev(nullptr, gFalse, 0.0, gFalse, gFalse);
     } else {
         delete doc;
         return EXIT_FAILURE;
     }
 
+    // process if textOut is ok
     if (textOut->isOk()) {
+        globalParams = new GlobalParams();
+//        globalParams->setTextPageBreaks(gTrue);
+//        globalParams->setErrQuiet(gFalse);
+
         PDFDocument pdf_document;
         PDFSection pdf_section;
         bool start_parse = false;
 
+        std::cout << "Processing " << doc->getNumPages() << " pages of " << argv[1] << std::endl;
+
         for (int page = 1; page <= doc->getNumPages(); ++page) {
             PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
-            double y0 = page_mediabox->y2 - page_footer_height;
+            double y0 = page_mediabox->y2 - pageFooterHeight;
             doc->displayPage(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse);
+
 
             TextPage* textPage = textOut->takeText();
             std::list<TextBlockInformation*> text_block_information_list;
 
             for (TextFlow* flow = textPage->getFlows(); flow; flow = flow->getNext()) {
                 for (TextBlock* text_block = flow->getBlocks(); text_block; text_block = text_block->getNext()) {
+
                     // must process text_block here as it'll expire after parsing page
                     TextBlockInformation* text_block_information = extract_text_block_information(text_block, !start_parse, y0);
                     text_block_information_list.push_back(text_block_information);
@@ -333,6 +338,9 @@ int main(int argc, char* argv[]) {
                 }
             }
             textPage->decRefCnt();
+
+
+            std::cout << page << ": " << start_parse << std::endl;
 
             // after first page which has page number
             if (start_parse) {
@@ -385,16 +393,18 @@ int main(int argc, char* argv[]) {
         pdf_document_json_file << json_pdf_document.dump(4);
         pdf_document_json_file.close();
 
-    } else {
         delete textOut;
         delete doc;
         delete globalParams;
+    } else {
+        delete textOut;
+        delete doc;
         return EXIT_FAILURE;
     }
 
-    // TODO: check memory
-//    delete doc;
-//    uMap->decRefCnt();
+    // check for memory leaks
+    Object::memCheck(stderr);
+    gMemReport(stderr);
 
     return EXIT_SUCCESS;
 }
