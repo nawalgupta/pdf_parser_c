@@ -177,7 +177,7 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
 //                std::cout << "Document page number: " << line_string << std::endl;
             }
         }
-    } else {
+    } else if (yMinA < y0) {
         std::stringstream partial_paragraph_content_string_stream;
         std::stringstream emphasized_word_string_stream;
         bool parsing_emphasized_word = false;
@@ -233,13 +233,9 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
                 }
                 partial_paragraph_content_string_stream << u8" "; // utf-8 encoded space character
             }
-            if (parsing_emphasized_word) {
-                emphasized_word_string_stream << u8" ";
-            }
-            partial_paragraph_content_string_stream << u8" "; // utf-8 encoded space character
         }
         text_block_information->partial_paragraph_content = partial_paragraph_content_string_stream.str();
-        text_block_information->partial_paragraph_content.pop_back();
+//        text_block_information->partial_paragraph_content.pop_back();
 
         // if emphasized_word is in the end of partial_paragraph
         std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
@@ -376,6 +372,7 @@ int main(int argc, char* argv[]) {
                         if (text_block_information->partial_paragraph_content.length() > 0) {
                             if (text_block_information->has_title) {
                                 if (pdf_section.title.length() > 0) {
+                                    pdf_section.content.pop_back();
                                     pdf_document.sections.push_back(pdf_section);
                                 }
 
@@ -398,6 +395,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (pdf_section.title.length() > 0) {
+            pdf_section.content.pop_back();
             pdf_document.sections.push_back(pdf_section);
         }
 
@@ -427,10 +425,6 @@ int main(int argc, char* argv[]) {
         delete doc;
         return EXIT_FAILURE;
     }
-
-    // check for memory leaks
-    Object::memCheck(stderr);
-    gMemReport(stderr);
 
     return EXIT_SUCCESS;
 }
