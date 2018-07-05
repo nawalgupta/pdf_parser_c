@@ -183,6 +183,8 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
         bool parsing_emphasized_word = false;
         std::regex font_regex(".*([bB]old|[iI]talic).*");
         std::smatch font_regex_match; // string match
+        GooString *g_font_name, *g_prev_font_name;
+        std::string font_name;
         for (TextLine* line = text_block->getLines(); line; line = line->getNext()) {
             for (TextWord* word = line->getWords(); word; word = word->getNext()) {
                 // extract a partition of emphasized word from word
@@ -193,19 +195,38 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
                     // add character to partial paragraph content
                     partial_paragraph_content_string_stream << character;
 
-                    // process emphasized word
-                    std::string font_name = word->getFontName(i)->toStr();
-                    if (std::regex_match(font_name, font_regex_match, font_regex)) {
-                        parsing_emphasized_word = true;
-                        emphasized_word_string_stream << character;
-                    } else if (parsing_emphasized_word) {
-                        std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
-                        if (trimmed_string.length() > 0) {
-                            text_block_information->emphasized_words.push_back(trimmed_string);
+                    g_font_name = word->getFontName(i);
+                    font_name = g_font_name->toStr();
+                    if (parsing_emphasized_word) {  // just need to compare to font of previous character
+                        if (g_prev_font_name->cmp(g_font_name) == 0) { // same as previous character
+                            emphasized_word_string_stream << character;
+                        } else {
+                            std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
+                            if (trimmed_string.length() > 0) {
+                                text_block_information->emphasized_words.push_back(trimmed_string);
+                            }
+                            emphasized_word_string_stream.str(std::string());
+                            parsing_emphasized_word = false;
+
+                            if (std::regex_match(font_name, font_regex_match, font_regex)) {
+                                parsing_emphasized_word = true;
+                                emphasized_word_string_stream << character;
+                            }
                         }
-                        emphasized_word_string_stream.str(std::string());
-                        parsing_emphasized_word = false;
+                    } else {
+                        if (std::regex_match(font_name, font_regex_match, font_regex)) {
+                            parsing_emphasized_word = true;
+                            emphasized_word_string_stream << character;
+                        } else if (parsing_emphasized_word) {
+                            std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
+                            if (trimmed_string.length() > 0) {
+                                text_block_information->emphasized_words.push_back(trimmed_string);
+                            }
+                            emphasized_word_string_stream.str(std::string());
+                            parsing_emphasized_word = false;
+                        }
                     }
+                    g_prev_font_name = g_font_name;
                 }
                 if (parsing_emphasized_word) {
                     emphasized_word_string_stream << u8" ";
@@ -342,7 +363,7 @@ int main(int argc, char* argv[]) {
             textPage->decRefCnt();
 
 
-            std::cout << page << ": " << start_parse << std::endl;
+//            std::cout << page << ": " << start_parse << std::endl;
 
             // after first page which has page number
             if (start_parse) {
