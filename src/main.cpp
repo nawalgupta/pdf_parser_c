@@ -239,6 +239,7 @@ static inline TextBlockInformation* extract_text_block_information(TextBlock* te
             partial_paragraph_content_string_stream << u8" "; // utf-8 encoded space character
         }
         text_block_information->partial_paragraph_content = partial_paragraph_content_string_stream.str();
+        text_block_information->partial_paragraph_content.pop_back();
 
         // if emphasized_word is in the end of partial_paragraph
         std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
