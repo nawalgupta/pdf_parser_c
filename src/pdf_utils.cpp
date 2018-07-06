@@ -79,6 +79,11 @@ bool TitleFormat::operator !=(const TitleFormat& title_format) {
                                                                 std::fabs(indent - title_format.indent) >= INDENT_DELTA;
 }
 
+TitleFormat::TitleFormat()
+{
+
+}
+
 TitleFormat::TitleFormat(const TitleFormat &other) :
     font_family(other.font_family),
     prefix_format(other.prefix_format),
@@ -238,9 +243,9 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
 //                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\\*\\+\\-]\\s" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
 //                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + "\".*"))))
         {
-            std::optional<TitleFormat> title_format;
-            title_format->font_size = 16;
-            title_format->emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
+            TitleFormat title_format;
+            title_format.font_size = 16;
+            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
             text_block_information->title_format = title_format;
         }
 

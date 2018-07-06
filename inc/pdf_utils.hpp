@@ -84,6 +84,8 @@ struct TitleFormat {
 
         bool operator!=(const TitleFormat& title_format);
 
+        TitleFormat();
+
         TitleFormat(const TitleFormat& other);
 
         TitleFormat(TitleFormat&& other);
