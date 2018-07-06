@@ -246,7 +246,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
             TitleFormat title_format;
             title_format.font_size = 16;
             title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
-            text_block_information->title_format = title_format;
+            text_block_information->title_format = std::move(title_format);
         }
 
         // linhlt rule: if title length > titleMaxLength -> not a title
