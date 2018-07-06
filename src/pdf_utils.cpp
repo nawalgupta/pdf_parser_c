@@ -76,7 +76,63 @@ bool TitleFormat::operator !=(const TitleFormat& title_format) {
            font_family.compare(title_format.font_family) != 0 ||
            prefix_format.compare(title_format.prefix_format) != 0 ||
            (same_line_with_content ^ title_format.same_line_with_content) ||
-           std::fabs(indent - title_format.indent) >= INDENT_DELTA;
+                                                                std::fabs(indent - title_format.indent) >= INDENT_DELTA;
+}
+
+TitleFormat::TitleFormat(const TitleFormat &other) :
+    font_family(other.font_family),
+    prefix_format(other.prefix_format),
+    font_size(other.font_size),
+    font_style(other.font_style),
+    title_case(other.title_case),
+    prefix(other.prefix),
+    emphasize_style(other.emphasize_style),
+    same_line_with_content(other.same_line_with_content),
+    indent(other.indent)
+{
+
+}
+
+TitleFormat::TitleFormat(TitleFormat &&other) :
+    font_family(std::move(other.font_family)),
+    prefix_format(std::move(other.prefix_format)),
+    font_size(other.font_size),
+    font_style(other.font_style),
+    title_case(other.title_case),
+    prefix(other.prefix),
+    emphasize_style(other.emphasize_style),
+    same_line_with_content(other.same_line_with_content),
+    indent(other.indent)
+{
+
+}
+
+TitleFormat &TitleFormat::operator=(const TitleFormat &other)
+{
+    font_family = other.font_family;
+    prefix_format = other.prefix_format;
+    font_size = other.font_size;
+    font_style = other.font_style;
+    title_case = other.title_case;
+    prefix = other.prefix;
+    emphasize_style = other.emphasize_style;
+    same_line_with_content = other.same_line_with_content;
+    indent = other.indent;
+    return *this;
+}
+
+TitleFormat &TitleFormat::operator=(TitleFormat &&other)
+{
+    font_family = std::move(other.font_family);
+    prefix_format = std::move(other.prefix_format);
+    font_size = other.font_size;
+    font_style = other.font_style;
+    title_case = other.title_case;
+    prefix = other.prefix;
+    emphasize_style = other.emphasize_style;
+    same_line_with_content = other.same_line_with_content;
+    indent = other.indent;
+    return *this;
 }
 
 
@@ -182,8 +238,10 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
 //                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\\*\\+\\-]\\s" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
 //                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + "\".*"))))
         {
-            text_block_information->title_format->font_size = 16;
-            text_block_information->title_format->emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
+            std::optional<TitleFormat> title_format;
+            title_format->font_size = 16;
+            title_format->emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
+            text_block_information->title_format = title_format;
         }
 
         // linhlt rule: if title length > titleMaxLength -> not a title

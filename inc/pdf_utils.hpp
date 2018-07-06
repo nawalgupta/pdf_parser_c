@@ -83,6 +83,14 @@ struct TitleFormat {
         bool operator==(const TitleFormat& title_format);
 
         bool operator!=(const TitleFormat& title_format);
+
+        TitleFormat(const TitleFormat& other);
+
+        TitleFormat(TitleFormat&& other);
+
+        TitleFormat& operator=(const TitleFormat& other);
+
+        TitleFormat& operator=(TitleFormat&& other);
 };
 
 struct TextBlockInformation {
