@@ -183,7 +183,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
 
                     font_info = word->getFontInfo(i);
                     if (parsing_emphasized_word) {  // just need to compare to font of previous character
-                        if (font_info == prev_font_info) { // same as previous character
+                        if (font_info->gfxFont == prev_font_info->gfxFont) { // same as previous character
                             emphasized_word_string_stream << character;
                         } else {
                             std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
