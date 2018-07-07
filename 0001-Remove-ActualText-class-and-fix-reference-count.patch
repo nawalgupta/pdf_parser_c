@@ -1,0 +1,372 @@
+From 5c1bf237be1168c498f78d03d5c87ca8d4bcd1fe Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?B=E1=BA=A1ch=20Ng=E1=BB=8Dc=20S=C6=A1n?=
+ <blackthunder0812@gmail.com>
+Date: Sun, 24 Jun 2018 23:38:23 +0700
+Subject: [PATCH] Remove ActualText class and fix reference count
+
+---
+ poppler/CairoOutputDev.cc |  20 ++------
+ poppler/CairoOutputDev.h  |   1 -
+ poppler/TextOutputDev.cc  | 120 +++++++++++++++++++---------------------------
+ poppler/TextOutputDev.h   |  42 +++++-----------
+ 4 files changed, 65 insertions(+), 118 deletions(-)
+
+diff --git a/poppler/CairoOutputDev.cc b/poppler/CairoOutputDev.cc
+index 8e8102e9..5d84a9e3 100644
+--- a/poppler/CairoOutputDev.cc
++++ b/poppler/CairoOutputDev.cc
+@@ -171,7 +171,6 @@ CairoOutputDev::CairoOutputDev() {
+   knockoutCount = 0;
+ 
+   text = nullptr;
+-  actualText = nullptr;
+ 
+   // the SA parameter supposedly defaults to false, but Acrobat
+   // apparently hardwires it to true
+@@ -198,8 +197,6 @@ CairoOutputDev::~CairoOutputDev() {
+     cairo_pattern_destroy (shape);
+   if (text) 
+     text->decRefCnt();
+-  if (actualText)
+-    delete actualText;  
+ }
+ 
+ void CairoOutputDev::setCairo(cairo_t *cairo)
+@@ -228,16 +225,9 @@ void CairoOutputDev::setTextPage(TextPage *text)
+ {
+   if (this->text) 
+     this->text->decRefCnt();
+-  if (actualText)
+-    delete actualText;
+-  if (text) {
+-    this->text = text;
++  this->text = text;
++  if (this->text)
+     this->text->incRefCnt();
+-    actualText = new ActualText(text);
+-  } else {
+-    this->text = nullptr;
+-    actualText = nullptr;
+-  }
+ }
+ 
+ void CairoOutputDev::setAntialias(cairo_antialias_t antialias)
+@@ -1435,7 +1425,7 @@ void CairoOutputDev::drawChar(GfxState *state, double x, double y,
+ 
+   if (!text)
+     return;
+-  actualText->addChar (state, x, y, dx, dy, code, nBytes, u, uLen);
++  text->addChar (state, x, y, dx, dy, code, nBytes, u, uLen);
+ }
+ 
+ void CairoOutputDev::endString(GfxState *state)
+@@ -1592,13 +1582,13 @@ void CairoOutputDev::endTextObject(GfxState *state) {
+ void CairoOutputDev::beginActualText(GfxState *state, const GooString *text)
+ {
+   if (this->text)
+-    actualText->begin(state, text);
++    this->text->beginActualText(state, text);
+ }
+ 
+ void CairoOutputDev::endActualText(GfxState *state)
+ {
+   if (text)
+-    actualText->end(state);
++    text->endActualText(state);
+ }
+ 
+ static inline int splashRound(SplashCoord x) {
+diff --git a/poppler/CairoOutputDev.h b/poppler/CairoOutputDev.h
+index 6ee6f9e8..834a9924 100644
+--- a/poppler/CairoOutputDev.h
++++ b/poppler/CairoOutputDev.h
+@@ -353,7 +353,6 @@ protected:
+   GBool prescaleImages;
+ 
+   TextPage *text;		// text for the current page
+-  ActualText *actualText;
+ 
+   cairo_pattern_t *group;
+   cairo_pattern_t *shape;
+diff --git a/poppler/TextOutputDev.cc b/poppler/TextOutputDev.cc
+index 4a3070af..398c7ae0 100644
+--- a/poppler/TextOutputDev.cc
++++ b/poppler/TextOutputDev.cc
+@@ -2365,6 +2365,7 @@ TextPage::TextPage(GBool rawOrderA) {
+   underlines = new GooList();
+   links = new GooList();
+   mergeCombining = gTrue;
++  actualText.replacement = nullptr;
+ }
+ 
+ TextPage::~TextPage() {
+@@ -2454,6 +2455,8 @@ void TextPage::clear() {
+   fonts = new GooList();
+   underlines = new GooList();
+   links = new GooList();
++  delete actualText.replacement;
++  actualText.replacement = nullptr;
+ }
+ 
+ void TextPage::updateFont(GfxState *state) {
+@@ -2578,6 +2581,18 @@ void TextPage::addChar(GfxState *state, double x, double y,
+   int wMode;
+   Matrix mat;
+ 
++  if (actualText.replacement) {
++    // Inside actualText span.
++    if (!actualText.nBytes) {
++      actualText.x0 = x;
++      actualText.y0 = y;
++    }
++    actualText.x1 = x + dx;
++    actualText.y1 = y + dy;
++    actualText.nBytes += nBytes;
++    return;
++  }
++
+   // subtract char and word spacing from the dx,dy values
+   sp = state->getCharSpace();
+   if (c == (CharCode)0x20) {
+@@ -2759,6 +2774,37 @@ void TextPage::addLink(int xMin, int yMin, int xMax, int yMax, AnnotLink *link)
+   links->append(new TextLink(xMin, yMin, xMax, yMax, link));
+ }
+ 
++void TextPage::beginActualText(GfxState *state, const GooString *text)
++{
++  delete actualText.replacement;
++  actualText.replacement = new GooString(text);
++  actualText.nBytes = 0;
++}
++
++void TextPage::endActualText(GfxState *state)
++{
++  if (!actualText.replacement)
++      return;
++
++  // ActualText span closed. Output the span text and the
++  // extents of all the glyphs inside the span
++  if (actualText.nBytes) {
++    Unicode *uni = NULL;
++    int length;
++
++    // now that we have the position info for all of the text inside
++    // the marked content span, we feed the "ActualText" back through
++    // addChar()
++    length = TextStringToUCS4(actualText.replacement, &uni);
++    addChar(state, actualText.x0, actualText.y0,
++	    actualText.x1 - actualText.x0, actualText.y1 - actualText.y0,
++	    0, actualText.nBytes, uni, length);
++    gfree(uni);
++  }
++  delete actualText.replacement;
++  actualText.replacement = NULL;
++}
++
+ void TextPage::coalesce(GBool physLayout, double fixedPitch, GBool doHTML) {
+   UnicodeMap *uMap;
+   TextPool *pool;
+@@ -5486,70 +5532,6 @@ TextWordList *TextPage::makeWordList(GBool physLayout) {
+ #endif
+ 
+ //------------------------------------------------------------------------
+-// ActualText
+-//------------------------------------------------------------------------
+-ActualText::ActualText(TextPage *out) {
+-  out->incRefCnt();
+-  text = out;
+-  actualText = nullptr;
+-  actualTextNBytes = 0;
+-}
+-
+-ActualText::~ActualText() {
+-  if (actualText)
+-    delete actualText;
+-  text->decRefCnt();
+-}
+-
+-void ActualText::addChar(GfxState *state, double x, double y,
+-			 double dx, double dy,
+-			 CharCode c, int nBytes, Unicode *u, int uLen) {
+-  if (!actualText) {
+-    text->addChar(state, x, y, dx, dy, c, nBytes, u, uLen);
+-    return;
+-  }
+-
+-  // Inside ActualText span.
+-  if (!actualTextNBytes) {
+-    actualTextX0 = x;
+-    actualTextY0 = y;
+-  }
+-  actualTextX1 = x + dx;
+-  actualTextY1 = y + dy;
+-  actualTextNBytes += nBytes;
+-}
+-
+-void ActualText::begin(GfxState *state, const GooString *text) {
+-  if (actualText)
+-    delete actualText;
+-  actualText = new GooString(text);
+-  actualTextNBytes = 0;
+-}
+-
+-void ActualText::end(GfxState *state) {
+-  // ActualText span closed. Output the span text and the
+-  // extents of all the glyphs inside the span
+-
+-  if (actualTextNBytes) {
+-    Unicode *uni = nullptr;
+-    int length;
+-
+-    // now that we have the position info for all of the text inside
+-    // the marked content span, we feed the "ActualText" back through
+-    // text->addChar()
+-    length = TextStringToUCS4(actualText, &uni);
+-    text->addChar(state, actualTextX0, actualTextY0,
+-                  actualTextX1 - actualTextX0, actualTextY1 - actualTextY0,
+-                  0, actualTextNBytes, uni, length);
+-    gfree(uni);
+-  }
+-
+-  delete actualText;
+-  actualText = nullptr;
+-  actualTextNBytes = 0;
+-}
+-
+-//------------------------------------------------------------------------
+ // TextOutputDev
+ //------------------------------------------------------------------------
+ 
+@@ -5581,7 +5563,6 @@ TextOutputDev::TextOutputDev(char *fileName, GBool physLayoutA,
+     } else {
+       error(errIO, -1, "Couldn't open text file '{0:s}'", fileName);
+       ok = gFalse;
+-      actualText = nullptr;
+       return;
+     }
+     outputFunc = &TextOutputDev_outputToFile;
+@@ -5591,7 +5572,6 @@ TextOutputDev::TextOutputDev(char *fileName, GBool physLayoutA,
+ 
+   // set up text object
+   text = new TextPage(rawOrderA);
+-  actualText = new ActualText(text);
+ }
+ 
+ TextOutputDev::TextOutputDev(TextOutputFunc func, void *stream,
+@@ -5605,7 +5585,6 @@ TextOutputDev::TextOutputDev(TextOutputFunc func, void *stream,
+   rawOrder = rawOrderA;
+   doHTML = gFalse;
+   text = new TextPage(rawOrderA);
+-  actualText = new ActualText(text);
+   ok = gTrue;
+ }
+ 
+@@ -5619,7 +5598,6 @@ TextOutputDev::~TextOutputDev() {
+   if (text) {
+     text->decRefCnt();
+   }
+-  delete actualText;
+ }
+ 
+ void TextOutputDev::startPage(int pageNum, GfxState *state, XRef *xref) {
+@@ -5652,7 +5630,7 @@ void TextOutputDev::drawChar(GfxState *state, double x, double y,
+ 			     double dx, double dy,
+ 			     double originX, double originY,
+ 			     CharCode c, int nBytes, Unicode *u, int uLen) {
+-  actualText->addChar(state, x, y, dx, dy, c, nBytes, u, uLen);
++  text->addChar(state, x, y, dx, dy, c, nBytes, u, uLen);
+ }
+ 
+ void TextOutputDev::incCharCount(int nChars) {
+@@ -5661,12 +5639,12 @@ void TextOutputDev::incCharCount(int nChars) {
+ 
+ void TextOutputDev::beginActualText(GfxState *state, const GooString *text)
+ {
+-  actualText->begin(state, text);
++  this->text->beginActualText(state, text);
+ }
+ 
+ void TextOutputDev::endActualText(GfxState *state)
+ {
+-  actualText->end(state);
++  text->endActualText(state);
+ }
+ 
+ void TextOutputDev::stroke(GfxState *state) {
+diff --git a/poppler/TextOutputDev.h b/poppler/TextOutputDev.h
+index 092acd67..f8c0c7e3 100644
+--- a/poppler/TextOutputDev.h
++++ b/poppler/TextOutputDev.h
+@@ -591,6 +591,10 @@ public:
+   // Add a hyperlink.
+   void addLink(int xMin, int yMin, int xMax, int yMax, AnnotLink *link);
+ 
++  // Mark the actual text replacement
++  void beginActualText(GfxState *state, const GooString *text);
++  void endActualText(GfxState *state);
++
+   // Coalesce strings that look like parts of the same line.
+   void coalesce(GBool physLayout, double fixedPitch, GBool doHTML);
+ 
+@@ -706,6 +710,13 @@ private:
+   GooList *underlines;		// [TextUnderline]
+   GooList *links;		// [TextLink]
+ 
++  struct {
++    GooString *replacement;     // replacement text for the span
++    double x0, y0, x1, y1;
++    int nBytes;
++  } actualText;
++
++
+   int refCnt;
+ 
+   friend class TextLine;
+@@ -717,36 +728,6 @@ private:
+   friend class TextSelectionDumper;
+ };
+ 
+-//------------------------------------------------------------------------
+-// ActualText
+-//------------------------------------------------------------------------
+-
+-class ActualText {
+-public:
+-  // Create an ActualText
+-  ActualText(TextPage *out);
+-  ~ActualText();
+-
+-  ActualText(const ActualText &) = delete;
+-  ActualText& operator=(const ActualText &) = delete;
+-
+-  void addChar(GfxState *state, double x, double y,
+-	       double dx, double dy,
+-	       CharCode c, int nBytes, Unicode *u, int uLen);
+-  void begin(GfxState *state, const GooString *text);
+-  void end(GfxState *state);
+-
+-private:
+-  TextPage *text;
+-
+-  GooString *actualText;        // replacement text for the span
+-  double actualTextX0;
+-  double actualTextY0;
+-  double actualTextX1;
+-  double actualTextY1;
+-  int actualTextNBytes;
+-};
+-  
+ 
+ //------------------------------------------------------------------------
+ // TextOutputDev
+@@ -906,7 +887,6 @@ private:
+   GBool doHTML;			// extra processing for HTML conversion
+   GBool ok;			// set up ok?
+ 
+-  ActualText *actualText;
+ };
+ 
+ #endif
+-- 
+2.13.6
+
