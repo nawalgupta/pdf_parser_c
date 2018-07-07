@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <iostream>
 
 static inline void ltrim(std::string& s) {
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
@@ -142,7 +143,7 @@ TitleFormat &TitleFormat::operator=(TitleFormat &&other)
 
 
 // extract text block information from text block
-TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool analyze_page_number, double y0)  {
+TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool analyze_page_number, double y0, unsigned int title_max_length)  {
     TextBlockInformation* text_block_information = new TextBlockInformation;
 
     // check if text block is page number
@@ -246,7 +247,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
         }
 
         // linhlt rule: if title length > titleMaxLength -> not a title
-        if (text_block_information->title_format && text_block_information->emphasized_words.front().length() > titleMaxLength) {
+        if (text_block_information->title_format && text_block_information->emphasized_words.front().length() > title_max_length) {
             text_block_information->title_format = std::nullopt;
         }
     }
@@ -257,7 +258,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
     return text_block_information;
 }
 
-PDFDoc* open_pdf_document(char *file_name) {
+PDFDoc* open_pdf_document(char *file_name, char *owner_password, char *user_password) {
     GooString* fileName;
     GooString* ownerPW, *userPW;
 
@@ -265,15 +266,15 @@ PDFDoc* open_pdf_document(char *file_name) {
     fileName = new GooString(file_name);
 
     // owner password
-    if (ownerPassword[0] != '\001') {
-        ownerPW = new GooString(ownerPassword);
+    if (owner_password[0] != '\001') {
+        ownerPW = new GooString(owner_password);
     } else {
         ownerPW = nullptr;
     }
 
     // user password
-    if (userPassword[0] != '\001') {
-        userPW = new GooString(userPassword);
+    if (user_password[0] != '\001') {
+        userPW = new GooString(user_password);
     } else {
         userPW = nullptr;
     }

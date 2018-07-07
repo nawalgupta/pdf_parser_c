@@ -28,40 +28,9 @@
 #include <Page.h>
 #include <PDFDocFactory.h>
 
-#include "parseargs.hpp"
-
 #ifndef TITLE_FORMAT_INDENT_DELTA
 #define TITLE_FORMAT_INDENT_DELTA 0.1
 #endif
-
-static int titleMaxLength = 100;
-static int pageFooterHeight = 60.0;
-static char ownerPassword[33] = "\001";
-static char userPassword[33] = "\001";
-static double resolution = 72.0;
-
-static const ArgDesc argDesc[] = {
-    {
-        "-L",       argInt,      &titleMaxLength,     0,
-        "title max length"
-    },
-    {
-        "-pfh",     argFP,       &pageFooterHeight, 0,
-        "page footer height"
-    },
-    {
-        "-opw",     argString,   ownerPassword,       sizeof(ownerPassword),
-        "owner password (for encrypted files)"
-    },
-    {
-        "-upw",     argString,   userPassword,        sizeof(userPassword),
-        "user password (for encrypted files)"
-    },
-    {
-        "-r",       argFP,       &resolution,         0,
-        "resolution, in DPI (default is 72.0)"
-    }
-};
 
 struct TitleFormat {
         enum class CASE {ALL_UPPER, FIRST_ONLY_UPPER, ALL_LOWER};
@@ -134,8 +103,8 @@ static inline std::string trim_copy(std::string s);
 static inline std::string UnicodeToUTF8(Unicode codepoint);
 
 // extract text block information from text block
-TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool analyze_page_number, double y0);
+TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool analyze_page_number, double y0, unsigned int title_max_length);
 
-PDFDoc* open_pdf_document(char *file_name);
+PDFDoc* open_pdf_document(char *file_name, char *owner_password, char *user_password);
 
 std::string parse_pdf_document(std::unique_ptr<PDFDocument> pdf_ptr);

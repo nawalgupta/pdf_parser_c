@@ -29,9 +29,16 @@ int main(int argc, char* argv[]) {
     PDFDoc* doc;
     TextOutputDev* textOut;
 
+    int title_max_length = 100;
+    int page_footer_height = 60.0;
+    char owner_password[33] = "\001";
+    char user_password[33] = "\001";
+    double resolution = 72.0;
+    char* file_path = argv[1];
+
     // parse args
-    if (argc > 1 && parseArgs(argDesc, &argc, argv)) {
-        doc = open_pdf_document(argv[1]);
+    if (argc > 1) {
+        doc = open_pdf_document(file_path, owner_password, user_password);
     } else {
         return EXIT_FAILURE;
     }
@@ -59,7 +66,7 @@ int main(int argc, char* argv[]) {
 
         for (int page = 1; page <= doc->getNumPages(); ++page) {
             PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
-            double y0 = page_mediabox->y2 - pageFooterHeight;
+            double y0 = page_mediabox->y2 - page_footer_height;
             doc->displayPage(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse);
 
 
@@ -70,7 +77,7 @@ int main(int argc, char* argv[]) {
                 for (TextBlock* text_block = flow->getBlocks(); text_block; text_block = text_block->getNext()) {
 
                     // must process text_block here as it'll expire after parsing page
-                    TextBlockInformation* text_block_information = extract_text_block_information(text_block, !start_parse, y0);
+                    TextBlockInformation* text_block_information = extract_text_block_information(text_block, !start_parse, y0, title_max_length);
                     text_block_information_list.push_back(text_block_information);
 
                     // if atleast 1 text block is page number block
