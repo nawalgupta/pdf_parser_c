@@ -193,13 +193,13 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                             emphasized_word_string_stream.str(std::string());
                             parsing_emphasized_word = false;
 
-                            if (word->getFontInfo(i)->isBold() || word->getFontInfo(i)->isItalic()) {
+                            if (word->getFontInfo(i)->gfxFont->getWeight() > GfxFont::W400  || word->getFontInfo(i)->isItalic()) {
                                 parsing_emphasized_word = true;
                                 emphasized_word_string_stream << character;
                             }
                         }
                     } else {
-                        if (word->getFontInfo(i)->isBold() || word->getFontInfo(i)->isItalic()) {
+                        if (word->getFontInfo(i)->gfxFont->getWeight() > GfxFont::W400 || word->getFontInfo(i)->isItalic()) {
                             parsing_emphasized_word = true;
                             emphasized_word_string_stream << character;
                         } else if (parsing_emphasized_word) {

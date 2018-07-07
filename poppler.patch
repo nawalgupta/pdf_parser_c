@@ -1,0 +1,740 @@
+diff --git a/poppler/CairoOutputDev.cc b/poppler/CairoOutputDev.cc
+index 8e8102e9..5d84a9e3 100644
+--- a/poppler/CairoOutputDev.cc
++++ b/poppler/CairoOutputDev.cc
+@@ -171,7 +171,6 @@ CairoOutputDev::CairoOutputDev() {
+   knockoutCount = 0;
+ 
+   text = nullptr;
+-  actualText = nullptr;
+ 
+   // the SA parameter supposedly defaults to false, but Acrobat
+   // apparently hardwires it to true
+@@ -198,8 +197,6 @@ CairoOutputDev::~CairoOutputDev() {
+     cairo_pattern_destroy (shape);
+   if (text) 
+     text->decRefCnt();
+-  if (actualText)
+-    delete actualText;  
+ }
+ 
+ void CairoOutputDev::setCairo(cairo_t *cairo)
+@@ -228,16 +225,9 @@ void CairoOutputDev::setTextPage(TextPage *text)
+ {
+   if (this->text) 
+     this->text->decRefCnt();
+-  if (actualText)
+-    delete actualText;
+-  if (text) {
+-    this->text = text;
++  this->text = text;
++  if (this->text)
+     this->text->incRefCnt();
+-    actualText = new ActualText(text);
+-  } else {
+-    this->text = nullptr;
+-    actualText = nullptr;
+-  }
+ }
+ 
+ void CairoOutputDev::setAntialias(cairo_antialias_t antialias)
+@@ -1435,7 +1425,7 @@ void CairoOutputDev::drawChar(GfxState *state, double x, double y,
+ 
+   if (!text)
+     return;
+-  actualText->addChar (state, x, y, dx, dy, code, nBytes, u, uLen);
++  text->addChar (state, x, y, dx, dy, code, nBytes, u, uLen);
+ }
+ 
+ void CairoOutputDev::endString(GfxState *state)
+@@ -1592,13 +1582,13 @@ void CairoOutputDev::endTextObject(GfxState *state) {
+ void CairoOutputDev::beginActualText(GfxState *state, const GooString *text)
+ {
+   if (this->text)
+-    actualText->begin(state, text);
++    this->text->beginActualText(state, text);
+ }
+ 
+ void CairoOutputDev::endActualText(GfxState *state)
+ {
+   if (text)
+-    actualText->end(state);
++    text->endActualText(state);
+ }
+ 
+ static inline int splashRound(SplashCoord x) {
+diff --git a/poppler/CairoOutputDev.h b/poppler/CairoOutputDev.h
+index 6ee6f9e8..834a9924 100644
+--- a/poppler/CairoOutputDev.h
++++ b/poppler/CairoOutputDev.h
+@@ -353,7 +353,6 @@ protected:
+   GBool prescaleImages;
+ 
+   TextPage *text;		// text for the current page
+-  ActualText *actualText;
+ 
+   cairo_pattern_t *group;
+   cairo_pattern_t *shape;
+diff --git a/poppler/TextOutputDev.cc b/poppler/TextOutputDev.cc
+index 4a3070af..398c7ae0 100644
+--- a/poppler/TextOutputDev.cc
++++ b/poppler/TextOutputDev.cc
+@@ -2365,6 +2365,7 @@ TextPage::TextPage(GBool rawOrderA) {
+   underlines = new GooList();
+   links = new GooList();
+   mergeCombining = gTrue;
++  actualText.replacement = nullptr;
+ }
+ 
+ TextPage::~TextPage() {
+@@ -2454,6 +2455,8 @@ void TextPage::clear() {
+   fonts = new GooList();
+   underlines = new GooList();
+   links = new GooList();
++  delete actualText.replacement;
++  actualText.replacement = nullptr;
+ }
+ 
+ void TextPage::updateFont(GfxState *state) {
+@@ -2578,6 +2581,18 @@ void TextPage::addChar(GfxState *state, double x, double y,
+   int wMode;
+   Matrix mat;
+ 
++  if (actualText.replacement) {
++    // Inside actualText span.
++    if (!actualText.nBytes) {
++      actualText.x0 = x;
++      actualText.y0 = y;
++    }
++    actualText.x1 = x + dx;
++    actualText.y1 = y + dy;
++    actualText.nBytes += nBytes;
++    return;
++  }
++
+   // subtract char and word spacing from the dx,dy values
+   sp = state->getCharSpace();
+   if (c == (CharCode)0x20) {
+@@ -2759,6 +2774,37 @@ void TextPage::addLink(int xMin, int yMin, int xMax, int yMax, AnnotLink *link)
+   links->append(new TextLink(xMin, yMin, xMax, yMax, link));
+ }
+ 
++void TextPage::beginActualText(GfxState *state, const GooString *text)
++{
++  delete actualText.replacement;
++  actualText.replacement = new GooString(text);
++  actualText.nBytes = 0;
++}
++
++void TextPage::endActualText(GfxState *state)
++{
++  if (!actualText.replacement)
++      return;
++
++  // ActualText span closed. Output the span text and the
++  // extents of all the glyphs inside the span
++  if (actualText.nBytes) {
++    Unicode *uni = NULL;
++    int length;
++
++    // now that we have the position info for all of the text inside
++    // the marked content span, we feed the "ActualText" back through
++    // addChar()
++    length = TextStringToUCS4(actualText.replacement, &uni);
++    addChar(state, actualText.x0, actualText.y0,
++	    actualText.x1 - actualText.x0, actualText.y1 - actualText.y0,
++	    0, actualText.nBytes, uni, length);
++    gfree(uni);
++  }
++  delete actualText.replacement;
++  actualText.replacement = NULL;
++}
++
+ void TextPage::coalesce(GBool physLayout, double fixedPitch, GBool doHTML) {
+   UnicodeMap *uMap;
+   TextPool *pool;
+@@ -5486,70 +5532,6 @@ TextWordList *TextPage::makeWordList(GBool physLayout) {
+ #endif
+ 
+ //------------------------------------------------------------------------
+-// ActualText
+-//------------------------------------------------------------------------
+-ActualText::ActualText(TextPage *out) {
+-  out->incRefCnt();
+-  text = out;
+-  actualText = nullptr;
+-  actualTextNBytes = 0;
+-}
+-
+-ActualText::~ActualText() {
+-  if (actualText)
+-    delete actualText;
+-  text->decRefCnt();
+-}
+-
+-void ActualText::addChar(GfxState *state, double x, double y,
+-			 double dx, double dy,
+-			 CharCode c, int nBytes, Unicode *u, int uLen) {
+-  if (!actualText) {
+-    text->addChar(state, x, y, dx, dy, c, nBytes, u, uLen);
+-    return;
+-  }
+-
+-  // Inside ActualText span.
+-  if (!actualTextNBytes) {
+-    actualTextX0 = x;
+-    actualTextY0 = y;
+-  }
+-  actualTextX1 = x + dx;
+-  actualTextY1 = y + dy;
+-  actualTextNBytes += nBytes;
+-}
+-
+-void ActualText::begin(GfxState *state, const GooString *text) {
+-  if (actualText)
+-    delete actualText;
+-  actualText = new GooString(text);
+-  actualTextNBytes = 0;
+-}
+-
+-void ActualText::end(GfxState *state) {
+-  // ActualText span closed. Output the span text and the
+-  // extents of all the glyphs inside the span
+-
+-  if (actualTextNBytes) {
+-    Unicode *uni = nullptr;
+-    int length;
+-
+-    // now that we have the position info for all of the text inside
+-    // the marked content span, we feed the "ActualText" back through
+-    // text->addChar()
+-    length = TextStringToUCS4(actualText, &uni);
+-    text->addChar(state, actualTextX0, actualTextY0,
+-                  actualTextX1 - actualTextX0, actualTextY1 - actualTextY0,
+-                  0, actualTextNBytes, uni, length);
+-    gfree(uni);
+-  }
+-
+-  delete actualText;
+-  actualText = nullptr;
+-  actualTextNBytes = 0;
+-}
+-
+-//------------------------------------------------------------------------
+ // TextOutputDev
+ //------------------------------------------------------------------------
+ 
+@@ -5581,7 +5563,6 @@ TextOutputDev::TextOutputDev(char *fileName, GBool physLayoutA,
+     } else {
+       error(errIO, -1, "Couldn't open text file '{0:s}'", fileName);
+       ok = gFalse;
+-      actualText = nullptr;
+       return;
+     }
+     outputFunc = &TextOutputDev_outputToFile;
+@@ -5591,7 +5572,6 @@ TextOutputDev::TextOutputDev(char *fileName, GBool physLayoutA,
+ 
+   // set up text object
+   text = new TextPage(rawOrderA);
+-  actualText = new ActualText(text);
+ }
+ 
+ TextOutputDev::TextOutputDev(TextOutputFunc func, void *stream,
+@@ -5605,7 +5585,6 @@ TextOutputDev::TextOutputDev(TextOutputFunc func, void *stream,
+   rawOrder = rawOrderA;
+   doHTML = gFalse;
+   text = new TextPage(rawOrderA);
+-  actualText = new ActualText(text);
+   ok = gTrue;
+ }
+ 
+@@ -5619,7 +5598,6 @@ TextOutputDev::~TextOutputDev() {
+   if (text) {
+     text->decRefCnt();
+   }
+-  delete actualText;
+ }
+ 
+ void TextOutputDev::startPage(int pageNum, GfxState *state, XRef *xref) {
+@@ -5652,7 +5630,7 @@ void TextOutputDev::drawChar(GfxState *state, double x, double y,
+ 			     double dx, double dy,
+ 			     double originX, double originY,
+ 			     CharCode c, int nBytes, Unicode *u, int uLen) {
+-  actualText->addChar(state, x, y, dx, dy, c, nBytes, u, uLen);
++  text->addChar(state, x, y, dx, dy, c, nBytes, u, uLen);
+ }
+ 
+ void TextOutputDev::incCharCount(int nChars) {
+@@ -5661,12 +5639,12 @@ void TextOutputDev::incCharCount(int nChars) {
+ 
+ void TextOutputDev::beginActualText(GfxState *state, const GooString *text)
+ {
+-  actualText->begin(state, text);
++  this->text->beginActualText(state, text);
+ }
+ 
+ void TextOutputDev::endActualText(GfxState *state)
+ {
+-  actualText->end(state);
++  text->endActualText(state);
+ }
+ 
+ void TextOutputDev::stroke(GfxState *state) {
+diff --git a/poppler/TextOutputDev.h b/poppler/TextOutputDev.h
+index 092acd67..b8ff0f5d 100644
+--- a/poppler/TextOutputDev.h
++++ b/poppler/TextOutputDev.h
+@@ -107,9 +107,9 @@ public:
+   GBool isBold() { return flags & fontBold; }
+ #endif
+ 
+-private:
+-
+   GfxFont *gfxFont;
++
++    private:
+ #ifdef TEXTOUT_WORD_LIST
+   GooString *fontName;
+   int flags;
+@@ -138,16 +138,16 @@ public:
+ 
+   // Add a character to the word.
+   void addChar(GfxState *state, TextFontInfo *fontA, double x, double y,
+-	       double dx, double dy, int charPosA, int charLen,
+-	       CharCode c, Unicode u, const Matrix &textMatA);
++           double dx, double dy, int charPosA, int charLen,
++           CharCode c, Unicode u, const Matrix &textMatA);
+ 
+   // Attempt to add a character to the word as a combining character.
+   // Either character u or the last character in the word must be an
+   // acute, dieresis, or other combining character.  Returns true if
+   // the character was added.
+   GBool addCombining(GfxState *state, TextFontInfo *fontA, double fontSizeA, double x, double y,
+-		     double dx, double dy, int charPosA, int charLen,
+-		     CharCode c, Unicode u, const Matrix &textMatA);
++             double dx, double dy, int charPosA, int charLen,
++             CharCode c, Unicode u, const Matrix &textMatA);
+ 
+   // Merge <word> onto the end of <this>.
+   void merge(TextWord *word);
+@@ -163,8 +163,8 @@ public:
+   static int cmpYX(const void *p1, const void *p2);
+ 
+   void visitSelection(TextSelectionVisitor *visitor,
+-		      PDFRectangle *selection,
+-		      SelectionStyle style);
++              PDFRectangle *selection,
++              SelectionStyle style);
+ 
+   // Get the TextFontInfo object associated with a character.
+   TextFontInfo *getFontInfo(int idx) { return font[idx]; }
+@@ -182,7 +182,7 @@ public:
+   void getBBox(double *xMinA, double *yMinA, double *xMaxA, double *yMaxA)
+     { *xMinA = xMin; *yMinA = yMin; *xMaxA = xMax; *yMaxA = yMax; }
+   void getCharBBox(int charIdx, double *xMinA, double *yMinA,
+-		   double *xMaxA, double *yMaxA);
++           double *xMaxA, double *yMaxA);
+   double getFontSize() { return fontSize; }
+   int getRotation() { return rot; }
+   int getCharPos() { return charPos[0]; }
+@@ -200,7 +200,7 @@ private:
+   void setInitialBounds(TextFontInfo *fontA, double x, double y);
+ 
+   int rot;			// rotation, multiple of 90 degrees
+-				//   (0, 1, 2, or 3)
++                //   (0, 1, 2, or 3)
+   int wMode;			// horizontal (0) or vertical (1) writing mode
+   double xMin, xMax;		// bounding box x coordinates
+   double yMin, yMax;		// bounding box y coordinates
+@@ -208,17 +208,17 @@ private:
+   Unicode *text;		// the text
+   CharCode *charcode;		// glyph indices
+   double *edge;			// "near" edge x or y coord of each char
+-				//   (plus one extra entry for the last char)
++                //   (plus one extra entry for the last char)
+   int *charPos;			// character position (within content stream)
+-				//   of each char (plus one extra entry for
+-				//   the last char)
++                //   of each char (plus one extra entry for
++                //   the last char)
+   int len;			// length of text/edge/charPos/font arrays
+   int size;			// size of text/edge/charPos/font arrays
+   TextFontInfo **font;		// font information for each char
+   Matrix *textMat;		// transformation matrix for each char
+   double fontSize;		// font size
+   GBool spaceAfter;		// set if there is a space between this
+-				//   word and the next word on the line
++                //   word and the next word on the line
+   GBool underlined;
+   TextWord *next;		// next word in line
+ 
+@@ -266,7 +266,7 @@ private:
+   int minBaseIdx;		// min baseline bucket index
+   int maxBaseIdx;		// max baseline bucket index
+   TextWord **pool;		// array of linked lists, one for each
+-				//   baseline value (multiple of 4 pts)
++                //   baseline value (multiple of 4 pts)
+   TextWord *cursor;		// pointer to last-accessed word
+   int cursorBaseIdx;		// baseline bucket index of last-accessed word
+ 
+@@ -311,8 +311,8 @@ public:
+   void coalesce(UnicodeMap *uMap);
+ 
+   void visitSelection(TextSelectionVisitor *visitor,
+-		      PDFRectangle *selection,
+-		      SelectionStyle style);
++              PDFRectangle *selection,
++              SelectionStyle style);
+ 
+   // Get the head of the linked list of TextWords.
+   TextWord *getWords() { return words; }
+@@ -333,9 +333,9 @@ private:
+   TextWord *words;		// words in this line
+   TextWord *lastWord;		// last word in this line
+   Unicode *text;		// Unicode text of the line, including
+-				//   spaces between words
++                //   spaces between words
+   double *edge;			// "near" edge x or y coord of each char
+-				//   (plus one extra entry for the last char)
++                //   (plus one extra entry for the last char)
+   int *col;			// starting column number of each Unicode char
+   int len;			// number of Unicode chars
+   int convertedLen;		// total number of converted characters
+@@ -389,8 +389,8 @@ public:
+   GBool isBelow(TextBlock *blk);
+ 
+   void visitSelection(TextSelectionVisitor *visitor,
+-		      PDFRectangle *selection,
+-		      SelectionStyle style);
++              PDFRectangle *selection,
++              SelectionStyle style);
+ 
+   // Get the head of the linked list of TextLines.
+   TextLine *getLines() { return lines; }
+@@ -410,12 +410,12 @@ private:
+   GBool isBeforeByRule2(TextBlock *blk1);
+ 
+   int visitDepthFirst(TextBlock *blkList, int pos1,
+-		      TextBlock **sorted, int sortPos,
+-		      GBool* visited);
++              TextBlock **sorted, int sortPos,
++              GBool* visited);
+   int visitDepthFirst(TextBlock *blkList, int pos1,
+-		      TextBlock **sorted, int sortPos,
+-		      GBool* visited,
+-		      TextBlock **cache, int cacheSize);
++              TextBlock **sorted, int sortPos,
++              GBool* visited,
++              TextBlock **cache, int cacheSize);
+ 
+   TextPage *page;		// the parent page
+   int rot;			// text rotation
+@@ -428,7 +428,7 @@ private:
+   GBool tableEnd;		// is this block at end of line of actual table
+ 
+   TextPool *pool;		// pool of words (used only until lines
+-				//   are built)
++                //   are built)
+   TextLine *lines;		// linked list of lines
+   TextLine *curLine;		// most recently added line
+   int nLines;			// number of lines
+@@ -573,8 +573,8 @@ public:
+ 
+   // Add a character to the current word.
+   void addChar(GfxState *state, double x, double y,
+-	       double dx, double dy,
+-	       CharCode c, int nBytes, Unicode *u, int uLen);
++           double dx, double dy,
++           CharCode c, int nBytes, Unicode *u, int uLen);
+ 
+   // Add <nChars> invisible characters.
+   void incCharCount(int nChars);
+@@ -591,6 +591,10 @@ public:
+   // Add a hyperlink.
+   void addLink(int xMin, int yMin, int xMax, int yMax, AnnotLink *link);
+ 
++  // Mark the actual text replacement
++  void beginActualText(GfxState *state, const GooString *text);
++  void endActualText(GfxState *state);
++
+   // Coalesce strings that look like parts of the same line.
+   void coalesce(GBool physLayout, double fixedPitch, GBool doHTML);
+ 
+@@ -602,34 +606,34 @@ public:
+   // just before the last find result; else stops looking at
+   // <xMax>,<yMax>.
+   GBool findText(Unicode *s, int len,
+-		 GBool startAtTop, GBool stopAtBottom,
+-		 GBool startAtLast, GBool stopAtLast,
+-		 GBool caseSensitive, GBool backward,
+-		 GBool wholeWord,
+-		 double *xMin, double *yMin,
+-		 double *xMax, double *yMax);
++         GBool startAtTop, GBool stopAtBottom,
++         GBool startAtLast, GBool stopAtLast,
++         GBool caseSensitive, GBool backward,
++         GBool wholeWord,
++         double *xMin, double *yMin,
++         double *xMax, double *yMax);
+ 
+   // Get the text which is inside the specified rectangle.
+   GooString *getText(double xMin, double yMin,
+-		     double xMax, double yMax);
++             double xMax, double yMax);
+ 
+   void visitSelection(TextSelectionVisitor *visitor,
+-		      PDFRectangle *selection,
+-		      SelectionStyle style);
++              PDFRectangle *selection,
++              SelectionStyle style);
+ 
+   void drawSelection(OutputDev *out,
+-		     double scale,
+-		     int rotation,
+-		     PDFRectangle *selection,
+-		     SelectionStyle style,
+-		     GfxColor *glyph_color, GfxColor *box_color);
++             double scale,
++             int rotation,
++             PDFRectangle *selection,
++             SelectionStyle style,
++             GfxColor *glyph_color, GfxColor *box_color);
+ 
+   GooList *getSelectionRegion(PDFRectangle *selection,
+-			      SelectionStyle style,
+-			      double scale);
++                  SelectionStyle style,
++                  double scale);
+ 
+   GooString *getSelectionText(PDFRectangle *selection,
+-			      SelectionStyle style);
++                  SelectionStyle style);
+ 
+   GooList **getSelectionWords(PDFRectangle *selection,
+                               SelectionStyle style,
+@@ -639,12 +643,12 @@ public:
+   // the text bounding rectangle and returns true; otherwise returns
+   // false.
+   GBool findCharRange(int pos, int length,
+-		      double *xMin, double *yMin,
+-		      double *xMax, double *yMax);
++              double *xMin, double *yMin,
++              double *xMax, double *yMax);
+ 
+   // Dump contents of page to a file.
+   void dump(void *outputStream, TextOutputFunc outputFunc,
+-	    GBool physLayout);
++        GBool physLayout);
+ 
+   // Get the head of the linked list of TextFlows.
+   TextFlow *getFlows() { return flows; }
+@@ -662,28 +666,28 @@ public:
+ #endif
+ 
+ private:
+-  
++
+   // Destructor.
+   ~TextPage();
+-  
++
+   void clear();
+   void assignColumns(TextLineFrag *frags, int nFrags, GBool rot);
+   int dumpFragment(Unicode *text, int len, UnicodeMap *uMap, GooString *s);
+ 
+   GBool rawOrder;		// keep text in content stream order
+   GBool mergeCombining;		// merge when combining and base characters
+-				// are drawn on top of each other
++                // are drawn on top of each other
+ 
+   double pageWidth, pageHeight;	// width and height of current page
+   TextWord *curWord;		// currently active string
+   int charPos;			// next character position (within content
+-				//   stream)
++                //   stream)
+   TextFontInfo *curFont;	// current font
+   double curFontSize;		// current font size
+   int nest;			// current nesting level (for Type 3 fonts)
+   int nTinyChars;		// number of "tiny" chars seen so far
+   GBool lastCharOverlap;	// set if the last added char overlapped the
+-				//   previous char
++                //   previous char
+ 
+   TextPool *pools[4];		// a "pool" of TextWords for each rotation
+   TextFlow *flows;		// linked list of flows
+@@ -691,13 +695,13 @@ private:
+   int nBlocks;			// number of blocks
+   int primaryRot;		// primary rotation
+   GBool primaryLR;		// primary direction (true means L-to-R,
+-				//   false means R-to-L)
++                //   false means R-to-L)
+   TextWord *rawWords;		// list of words, in raw order (only if
+-				//   rawOrder is set)
++                //   rawOrder is set)
+   TextWord *rawLastWord;	// last word on rawWords list
+ 
+   GooList *fonts;			// all font info objects used on this
+-				//   page [TextFontInfo]
++                //   page [TextFontInfo]
+ 
+   double lastFindXMin,		// coordinates of the last "find" result
+          lastFindYMin;
+@@ -706,6 +710,13 @@ private:
+   GooList *underlines;		// [TextUnderline]
+   GooList *links;		// [TextLink]
+ 
++  struct {
++    GooString *replacement;     // replacement text for the span
++    double x0, y0, x1, y1;
++    int nBytes;
++  } actualText;
++
++
+   int refCnt;
+ 
+   friend class TextLine;
+@@ -717,36 +728,6 @@ private:
+   friend class TextSelectionDumper;
+ };
+ 
+-//------------------------------------------------------------------------
+-// ActualText
+-//------------------------------------------------------------------------
+-
+-class ActualText {
+-public:
+-  // Create an ActualText
+-  ActualText(TextPage *out);
+-  ~ActualText();
+-
+-  ActualText(const ActualText &) = delete;
+-  ActualText& operator=(const ActualText &) = delete;
+-
+-  void addChar(GfxState *state, double x, double y,
+-	       double dx, double dy,
+-	       CharCode c, int nBytes, Unicode *u, int uLen);
+-  void begin(GfxState *state, const GooString *text);
+-  void end(GfxState *state);
+-
+-private:
+-  TextPage *text;
+-
+-  GooString *actualText;        // replacement text for the span
+-  double actualTextX0;
+-  double actualTextY0;
+-  double actualTextX1;
+-  double actualTextY1;
+-  int actualTextNBytes;
+-};
+-  
+ 
+ //------------------------------------------------------------------------
+ // TextOutputDev
+@@ -761,16 +742,16 @@ public:
+   // is maintained.  If <rawOrder> is true, the text is kept in
+   // content stream order.
+   TextOutputDev(char *fileName, GBool physLayoutA,
+-		double fixedPitchA, GBool rawOrderA,
+-		GBool append);
++        double fixedPitchA, GBool rawOrderA,
++        GBool append);
+ 
+   // Create a TextOutputDev which will write to a generic stream.  If
+   // <physLayoutA> is true, the original physical layout of the text
+   // is maintained.  If <rawOrder> is true, the text is kept in
+   // content stream order.
+   TextOutputDev(TextOutputFunc func, void *stream,
+-		GBool physLayoutA, double fixedPitchA,
+-		GBool rawOrderA);
++        GBool physLayoutA, double fixedPitchA,
++        GBool rawOrderA);
+ 
+   // Destructor.
+   ~TextOutputDev();
+@@ -816,9 +797,9 @@ public:
+   void beginString(GfxState *state, const GooString *s) override;
+   void endString(GfxState *state) override;
+   void drawChar(GfxState *state, double x, double y,
+-		double dx, double dy,
+-		double originX, double originY,
+-		CharCode c, int nBytes, Unicode *u, int uLen) override;
++        double dx, double dy,
++        double originX, double originY,
++        CharCode c, int nBytes, Unicode *u, int uLen) override;
+   void incCharCount(int nChars) override;
+   void beginActualText(GfxState *state, const GooString *text) override;
+   void endActualText(GfxState *state) override;
+@@ -841,35 +822,35 @@ public:
+   // just before the last find result; else stops looking at
+   // <xMax>,<yMax>.
+   GBool findText(Unicode *s, int len,
+-		 GBool startAtTop, GBool stopAtBottom,
+-		 GBool startAtLast, GBool stopAtLast,
+-		 GBool caseSensitive, GBool backward,
+-		 GBool wholeWord,
+-		 double *xMin, double *yMin,
+-		 double *xMax, double *yMax);
++         GBool startAtTop, GBool stopAtBottom,
++         GBool startAtLast, GBool stopAtLast,
++         GBool caseSensitive, GBool backward,
++         GBool wholeWord,
++         double *xMin, double *yMin,
++         double *xMax, double *yMax);
+ 
+   // Get the text which is inside the specified rectangle.
+   GooString *getText(double xMin, double yMin,
+-		   double xMax, double yMax);
++           double xMax, double yMax);
+ 
+   // Find a string by character position and length.  If found, sets
+   // the text bounding rectangle and returns true; otherwise returns
+   // false.
+   GBool findCharRange(int pos, int length,
+-		      double *xMin, double *yMin,
+-		      double *xMax, double *yMax);
++              double *xMin, double *yMin,
++              double *xMax, double *yMax);
+ 
+   void drawSelection(OutputDev *out, double scale, int rotation,
+-		     PDFRectangle *selection,
+-		     SelectionStyle style,
+-		     GfxColor *glyph_color, GfxColor *box_color);
++             PDFRectangle *selection,
++             SelectionStyle style,
++             GfxColor *glyph_color, GfxColor *box_color);
+ 
+   GooList *getSelectionRegion(PDFRectangle *selection,
+-			      SelectionStyle style,
+-			      double scale);
++                  SelectionStyle style,
++                  double scale);
+ 
+   GooString *getSelectionText(PDFRectangle *selection,
+-			      SelectionStyle style);
++                  SelectionStyle style);
+ 
+   // If true, will combine characters when a base and combining
+   // character are drawn on eachother.
+@@ -895,18 +876,17 @@ private:
+   TextOutputFunc outputFunc;	// output function
+   void *outputStream;		// output stream
+   GBool needClose;		// need to close the output file?
+-				//   (only if outputStream is a FILE*)
++                //   (only if outputStream is a FILE*)
+   TextPage *text;		// text for the current page
+   GBool physLayout;		// maintain original physical layout when
+-				//   dumping text
++                //   dumping text
+   double fixedPitch;		// if physLayout is true and this is non-zero,
+-				//   assume fixed-pitch characters with this
+-				//   width
++                //   assume fixed-pitch characters with this
++                //   width
+   GBool rawOrder;		// keep text in content stream order
+   GBool doHTML;			// extra processing for HTML conversion
+   GBool ok;			// set up ok?
+ 
+-  ActualText *actualText;
+ };
+ 
+ #endif
