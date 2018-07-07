@@ -50,6 +50,7 @@ int main(int argc, char* argv[]) {
 //        globalParams->setTextPageBreaks(gTrue);
 //        globalParams->setErrQuiet(gFalse);
 
+
         PDFDocument pdf_document;
         PDFSection pdf_section;
         bool start_parse = false;
