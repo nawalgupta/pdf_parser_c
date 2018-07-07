@@ -2,10 +2,11 @@ This program extract pdf file, save data to json file to use later. It use poppl
 
 **Following steps of setup instructions is for reference, adjust yourself with _your Linux distro_ and folder structure to not mess up the source code directory.**
 
+[PDF Implementation Reference](https://www.adobe.com/content/dam/acom/en/devnet/pdf/pdfs/pdf_reference_archives/PDFReference.pdf)
 
 To checkout:
 ```commandline
-git clone --recursive https://github.com/robinson0812/pdf_parser_c pdf_reader
+git clone https://github.com/robinson0812/pdf_parser_c pdf_reader
 ```
 
 Due to bug [pdftotext only outputs first page content with -bbox-layout option](https://bugs.freedesktop.org/show_bug.cgi?id=93344), after checkout poppler submodule, apply patch to fix:
@@ -13,7 +14,7 @@ Due to bug [pdftotext only outputs first page content with -bbox-layout option](
 
 ```commandline
 cd poppler
-git apply ../0001-Remove-ActualText-class-and-fix-reference-count.patch
+git apply poppler.patch
 ```
 
 Then build and verify poppler with command:

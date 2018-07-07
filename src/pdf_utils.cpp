@@ -161,6 +161,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                 delete text_word;
             }
             line_string.pop_back();
+            // TODO: match using faster regex lib (eg: boost.regex)
             if (std::regex_match(line_string, page_number_regex_match, page_number_regex)) {
                 text_block_information->is_page_number = true;
 //                std::cout << "Document page number: " << line_string << std::endl;
@@ -231,6 +232,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
         std::regex special_characters {R"([-[\]{}()*+?.,\^$|#\s])"};
         std::string replace_rule(R"(\$&)");
 
+        // TODO: find text before the first emphasized word and match with faster regex lib (eg: boost.regex) instead of std regex
         std::smatch title_match_result;
         if (!text_block_information->emphasized_words.empty() &&
             std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^(((\\d+(\\.\\d+)*\\.?)|[\\*\\+\\-]|(\\([a-z]{1,4}\\)))\\s+\"?)?" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")))
