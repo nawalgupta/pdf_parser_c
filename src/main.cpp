@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (pdf_section.title.length() > 0) {
-            pdf_section.content.pop_back();
+            trim(pdf_section.content);
             pdf_document.sections.push_back(pdf_section);
         }
 
