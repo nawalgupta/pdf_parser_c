@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <iostream>
 
+const double TitleFormat::INDENT_DELTA = TITLE_FORMAT_INDENT_DELTA;
+
 static inline void ltrim(std::string& s) {
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
         return !std::isspace(ch);
@@ -57,27 +59,23 @@ static inline std::string UnicodeToUTF8(Unicode codepoint) {
 }
 
 bool TitleFormat::operator ==(const TitleFormat& title_format) {
-    return font_size == title_format.font_size &&
-           font_style == title_format.font_style &&
+    return gfx_font == title_format.gfx_font &&
            title_case == title_format.title_case &&
            prefix == title_format.prefix &&
            emphasize_style == title_format.emphasize_style &&
-           font_family.compare(title_format.font_family) == 0 &&
            prefix_format.compare(title_format.prefix_format) == 0 &&
            !(same_line_with_content ^ title_format.same_line_with_content) &&
-           std::fabs(indent - title_format.indent) < INDENT_DELTA ;
+           std::fabs(indent - title_format.indent) <= INDENT_DELTA ;
 }
 
 bool TitleFormat::operator !=(const TitleFormat& title_format) {
-    return font_size != title_format.font_size ||
-           font_style != title_format.font_style ||
+    return gfx_font != title_format.gfx_font ||
            title_case != title_format.title_case ||
            prefix != title_format.prefix ||
            emphasize_style != title_format.emphasize_style ||
-           font_family.compare(title_format.font_family) != 0 ||
            prefix_format.compare(title_format.prefix_format) != 0 ||
            (same_line_with_content ^ title_format.same_line_with_content) ||
-                                                                std::fabs(indent - title_format.indent) >= INDENT_DELTA;
+           std::fabs(indent - title_format.indent) > INDENT_DELTA;
 }
 
 TitleFormat::TitleFormat()
@@ -86,10 +84,8 @@ TitleFormat::TitleFormat()
 }
 
 TitleFormat::TitleFormat(const TitleFormat &other) :
-    font_family(other.font_family),
+    gfx_font(other.gfx_font),
     prefix_format(other.prefix_format),
-    font_size(other.font_size),
-    font_style(other.font_style),
     title_case(other.title_case),
     prefix(other.prefix),
     emphasize_style(other.emphasize_style),
@@ -100,10 +96,8 @@ TitleFormat::TitleFormat(const TitleFormat &other) :
 }
 
 TitleFormat::TitleFormat(TitleFormat &&other) :
-    font_family(std::move(other.font_family)),
+    gfx_font(other.gfx_font),
     prefix_format(std::move(other.prefix_format)),
-    font_size(other.font_size),
-    font_style(other.font_style),
     title_case(other.title_case),
     prefix(other.prefix),
     emphasize_style(other.emphasize_style),
@@ -115,10 +109,8 @@ TitleFormat::TitleFormat(TitleFormat &&other) :
 
 TitleFormat &TitleFormat::operator=(const TitleFormat &other)
 {
-    font_family = other.font_family;
+    gfx_font = other.gfx_font;
     prefix_format = other.prefix_format;
-    font_size = other.font_size;
-    font_style = other.font_style;
     title_case = other.title_case;
     prefix = other.prefix;
     emphasize_style = other.emphasize_style;
@@ -129,10 +121,8 @@ TitleFormat &TitleFormat::operator=(const TitleFormat &other)
 
 TitleFormat &TitleFormat::operator=(TitleFormat &&other)
 {
-    font_family = std::move(other.font_family);
+    gfx_font = other.gfx_font;
     prefix_format = std::move(other.prefix_format);
-    font_size = other.font_size;
-    font_style = other.font_style;
     title_case = other.title_case;
     prefix = other.prefix;
     emphasize_style = other.emphasize_style;
@@ -194,7 +184,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                             emphasized_word_string_stream.str(std::string());
                             parsing_emphasized_word = false;
 
-                            if (word->getFontInfo(i)->gfxFont->getWeight() > GfxFont::W400  || word->getFontInfo(i)->isItalic()) {
+                            if (word->getFontInfo(i)->gfxFont->getWeight() > GfxFont::W400 || word->getFontInfo(i)->isItalic()) {
                                 parsing_emphasized_word = true;
                                 emphasized_word_string_stream << character;
                             }
@@ -243,7 +233,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
 //                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + "\".*"))))
         {
             TitleFormat title_format;
-            title_format.font_size = 16;
+//            title_format.font_size = 16;
             title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
             text_block_information->title_format = std::move(title_format);
         }

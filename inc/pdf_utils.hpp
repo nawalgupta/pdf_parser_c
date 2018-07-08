@@ -27,25 +27,24 @@
 #include <PDFDoc.h>
 #include <Page.h>
 #include <PDFDocFactory.h>
+#include <GfxFont.h>
 
 #ifndef TITLE_FORMAT_INDENT_DELTA
 #define TITLE_FORMAT_INDENT_DELTA 0.1
 #endif
 
 struct TitleFormat {
+        static const double INDENT_DELTA;
+
         enum class CASE {ALL_UPPER, FIRST_ONLY_UPPER, ALL_LOWER};
-        enum class FONT_STYLE {NONE, BOLD, ITALIC, UNDERLINE, BOLD_ITALIC, BOLD_UNDERLINE, ITALIC_UNDERLINE, BOLD_ITALIC_UNDERLINE};
         enum class PREFIX {NONE, BULLET, NUMBERING};
         enum class EMPHASIZE_STYLE {NONE, SINGLE_QUOTE, DOUBLE_QUOTE};
-        const double INDENT_DELTA = TITLE_FORMAT_INDENT_DELTA;
 
-        double font_size;
-        std::string font_family;
-        FONT_STYLE font_style;
+        GfxFont *gfx_font;
         CASE title_case;
         PREFIX prefix;
-        std::string prefix_format;
         EMPHASIZE_STYLE emphasize_style;
+        std::string prefix_format;
         bool same_line_with_content;
         double indent;
 
