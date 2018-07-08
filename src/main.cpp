@@ -88,28 +88,24 @@ int main(int argc, char* argv[]) {
             }
             textPage->decRefCnt();
 
-
-//            std::cout << page << ": " << start_parse << std::endl;
-
             // after first page which has page number
             if (start_parse) {
                 for (TextBlockInformation* text_block_information : text_block_information_list) {
                     // only add blocks that is not page number
                     if (!(text_block_information->is_page_number)) {
-                        if (text_block_information->partial_paragraph_content.length() > 0) {
-                            if (text_block_information->title_format) {
-                                if (pdf_section.title.length() > 0) {
-                                    pdf_section.content.pop_back();
-                                    pdf_document.sections.push_back(pdf_section);
-                                }
-
-                                pdf_section.title = text_block_information->emphasized_words.front();
-                                pdf_section.emphasized_words = text_block_information->emphasized_words;
-                                pdf_section.content = text_block_information->partial_paragraph_content;
-                            } else if (pdf_section.title.length() > 0) {
-                                pdf_section.emphasized_words.insert(pdf_section.emphasized_words.end(), text_block_information->emphasized_words.begin(), text_block_information->emphasized_words.end());
-                                pdf_section.content += text_block_information->partial_paragraph_content;
+                        if (text_block_information->title_format) {
+                            if (pdf_section.title.length() > 0) {
+                                trim(pdf_section.content);
+                                pdf_document.sections.push_back(pdf_section);
                             }
+
+                            pdf_section.title = text_block_information->emphasized_words.front();
+                            text_block_information->emphasized_words.pop_front();
+                            pdf_section.emphasized_words = text_block_information->emphasized_words;
+                            pdf_section.content = text_block_information->partial_paragraph_content;
+                        } else if (pdf_section.title.length() > 0) {
+                            pdf_section.emphasized_words.insert(pdf_section.emphasized_words.end(), text_block_information->emphasized_words.begin(), text_block_information->emphasized_words.end());
+                            pdf_section.content += text_block_information->partial_paragraph_content;
                         }
                     }
                 }

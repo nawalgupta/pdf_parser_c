@@ -6,38 +6,6 @@
 
 const double TitleFormat::INDENT_DELTA = TITLE_FORMAT_INDENT_DELTA;
 
-static inline void ltrim(std::string& s) {
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
-        return !std::isspace(ch);
-    }));
-}
-
-static inline void rtrim(std::string& s) {
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
-        return !std::isspace(ch);
-    }).base(), s.end());
-}
-
-static inline void trim(std::string& s) {
-    ltrim(s);
-    rtrim(s);
-}
-
-static inline std::string ltrim_copy(std::string s) {
-    ltrim(s);
-    return s;
-}
-
-static inline std::string rtrim_copy(std::string s) {
-    rtrim(s);
-    return s;
-}
-
-static inline std::string trim_copy(std::string s) {
-    trim(s);
-    return s;
-}
-
 static inline std::string UnicodeToUTF8(Unicode codepoint) {
     std::string out;
     if (codepoint <= 0x7f)
@@ -78,37 +46,33 @@ bool TitleFormat::operator !=(const TitleFormat& title_format) {
            std::fabs(indent - title_format.indent) > INDENT_DELTA;
 }
 
-TitleFormat::TitleFormat()
-{
+TitleFormat::TitleFormat() {
 
 }
 
-TitleFormat::TitleFormat(const TitleFormat &other) :
+TitleFormat::TitleFormat(const TitleFormat& other) :
     gfx_font(other.gfx_font),
     prefix_format(other.prefix_format),
     title_case(other.title_case),
     prefix(other.prefix),
     emphasize_style(other.emphasize_style),
     same_line_with_content(other.same_line_with_content),
-    indent(other.indent)
-{
+    indent(other.indent) {
 
 }
 
-TitleFormat::TitleFormat(TitleFormat &&other) :
+TitleFormat::TitleFormat(TitleFormat&& other) :
     gfx_font(other.gfx_font),
     prefix_format(std::move(other.prefix_format)),
     title_case(other.title_case),
     prefix(other.prefix),
     emphasize_style(other.emphasize_style),
     same_line_with_content(other.same_line_with_content),
-    indent(other.indent)
-{
+    indent(other.indent) {
 
 }
 
-TitleFormat &TitleFormat::operator=(const TitleFormat &other)
-{
+TitleFormat& TitleFormat::operator=(const TitleFormat& other) {
     gfx_font = other.gfx_font;
     prefix_format = other.prefix_format;
     title_case = other.title_case;
@@ -119,8 +83,7 @@ TitleFormat &TitleFormat::operator=(const TitleFormat &other)
     return *this;
 }
 
-TitleFormat &TitleFormat::operator=(TitleFormat &&other)
-{
+TitleFormat& TitleFormat::operator=(TitleFormat&& other) {
     gfx_font = other.gfx_font;
     prefix_format = std::move(other.prefix_format);
     title_case = other.title_case;
@@ -146,7 +109,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
             TextLine* line = text_block->getLines();
             std::string line_string;
             for (TextWord* word = line->getWords(); word; word = word->getNext()) {
-                GooString *text_word = word->getText();
+                GooString* text_word = word->getText();
                 line_string += text_word->toStr() + " ";
                 delete text_word;
             }
@@ -161,16 +124,14 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
         std::stringstream partial_paragraph_content_string_stream;
         std::stringstream emphasized_word_string_stream;
         bool parsing_emphasized_word = false;
-        TextFontInfo *font_info, *prev_font_info;
+        TextFontInfo* font_info, *prev_font_info;
+        std::optional<std::string> title_prefix;
         for (TextLine* line = text_block->getLines(); line; line = line->getNext()) {
             for (TextWord* word = line->getWords(); word; word = word->getNext()) {
                 // extract a partition of emphasized word from word
                 int word_length = word->getLength();
                 for (int i = 0; i < word_length; ++i) {
                     std::string character = UnicodeToUTF8(*(word->getChar(i)));
-
-                    // add character to partial paragraph content
-                    partial_paragraph_content_string_stream << character;
 
                     font_info = word->getFontInfo(i);
                     if (parsing_emphasized_word) {  // just need to compare to font of previous character
@@ -192,6 +153,10 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                     } else {
                         if (word->getFontInfo(i)->gfxFont->getWeight() > GfxFont::W400 || word->getFontInfo(i)->isItalic()) {
                             parsing_emphasized_word = true;
+                            // first time this occured
+                            if (!title_prefix && !partial_paragraph_content_string_stream.str().empty()) {
+                                title_prefix = partial_paragraph_content_string_stream.str();
+                            }
                             emphasized_word_string_stream << character;
                         } else if (parsing_emphasized_word) {
                             std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
@@ -202,6 +167,10 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                             parsing_emphasized_word = false;
                         }
                     }
+
+                    // add character to partial paragraph content
+                    partial_paragraph_content_string_stream << character;
+
                     prev_font_info = word->getFontInfo(i);
                 }
                 if (parsing_emphasized_word) {
@@ -211,7 +180,6 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
             }
         }
         text_block_information->partial_paragraph_content = partial_paragraph_content_string_stream.str();
-//        text_block_information->partial_paragraph_content.pop_back();
 
         // if emphasized_word is in the end of partial_paragraph
         std::string trimmed_string = trim_copy(emphasized_word_string_stream.str());
@@ -219,38 +187,79 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
             text_block_information->emphasized_words.push_back(trimmed_string);
         }
 
-        std::regex special_characters {R"([-[\]{}()*+?.,\^$|#\s])"};
-        std::string replace_rule(R"(\$&)");
-
-        // TODO: find text before the first emphasized word and match with faster regex lib (eg: boost.regex) instead of std regex
-        std::smatch title_match_result;
         if (!text_block_information->emphasized_words.empty() &&
-            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^(((\\d+(\\.\\d+)*\\.?)|[\\*\\+\\-]|(\\([a-z]{1,4}\\)))\\s+\"?)?" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")))
-//            (   std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-//                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\d+(\\.\\d+)*\\.?\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-//                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\([a-z]{1,4}\\)\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-//                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\\*\\+\\-]\\s" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-//                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + "\".*"))))
-        {
-            TitleFormat title_format;
-//            title_format.font_size = 16;
-            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
-            text_block_information->title_format = std::move(title_format);
-        }
+            text_block_information->emphasized_words.front().length() < title_max_length) {
+            std::regex special_characters {R"([-[\]{}()*+?.,\^$|#\s])"};
+            std::string replace_rule(R"(\$&)");
+            std::smatch title_prefix_match_result;
 
-        // linhlt rule: if title length > titleMaxLength -> not a title
-        if (text_block_information->title_format && text_block_information->emphasized_words.front().length() > title_max_length) {
-            text_block_information->title_format = std::nullopt;
+            if (title_prefix) {
+                // case 1: prefix is in following format: bullet/numbering space single/double quote
+                // step 1: find first word, using regex to match, check if it is bullet or numbering
+
+                // step 2: next character after space must be ' or "
+//                if (std::regex_match(title_prefix.value(), title_prefix_match_result, std::regex("^[\\*\\+\\-]\\s"))) {
+//                    TitleFormat title_format;
+//                    title_format.prefix = TitleFormat::PREFIX::BULLET;
+//                    text_block_information->title_format = std::move(title_format);
+//                }
+
+            } else {
+                // case 2: no prefix: first emphasize word is in begining of the block, the character after first emphasized word must be colon or space
+                unsigned int pos = text_block_information->emphasized_words.front().length();
+                unsigned int p_length = text_block_information->partial_paragraph_content.length();
+                if (pos == p_length) {
+                    TitleFormat title_format;
+                    title_format.prefix = TitleFormat::PREFIX::NONE;
+                    title_format.same_line_with_content = false;
+                    text_block_information->title_format = std::move(title_format);
+
+                    // cut title out of content
+                    text_block_information->partial_paragraph_content = "";
+                } else if (pos < p_length &&
+                           (text_block_information->partial_paragraph_content[pos] == ' ' ||
+                            text_block_information->partial_paragraph_content[pos] == ':')) {
+                    TitleFormat title_format;
+                    title_format.prefix = TitleFormat::PREFIX::NONE;
+                    title_format.same_line_with_content = true;
+                    text_block_information->title_format = std::move(title_format);
+
+                    // cut title out of content
+                    text_block_information->partial_paragraph_content = text_block_information->partial_paragraph_content.substr(pos + 1);
+                }
+            }
         }
     }
 
 
-//    std::cout << y << " | " << (y + h) <<  " | " << yMinA << " | " << yMaxA <<  " | " << xMinA << " | " << xMaxA << " | " << text_block_information->is_page_number << std::endl;
+//        if (title_prefix && std::regex_match(title_prefix.value(), title_prefix_match_result, std::regex())) {
+//            TitleFormat title_format;
+////            title_format.font_size = 16;
+//            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
+//            text_block_information->title_format = std::move(title_format);
+//        }
+
+
+//        // TODO: find text before the first emphasized word and match with faster regex lib (eg: boost.regex) instead of std regex
+//        std::smatch title_match_result;
+//        if (!text_block_information->emphasized_words.empty() &&
+//            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^(((\\d+(\\.\\d+)*\\.?)|[\\*\\+\\-]|(\\([a-z]{1,4}\\)))\\s+\"?)?" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")))
+////            (   std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
+////                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\d+(\\.\\d+)*\\.?\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
+////                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\([a-z]{1,4}\\)\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
+////                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\\*\\+\\-]\\s" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
+////                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + "\".*"))))
+//        {
+//            TitleFormat title_format;
+////            title_format.font_size = 16;
+//            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
+//            text_block_information->title_format = std::move(title_format);
+//        }
 
     return text_block_information;
 }
 
-PDFDoc* open_pdf_document(char *file_name, char *owner_password, char *user_password) {
+PDFDoc* open_pdf_document(char* file_name, char* owner_password, char* user_password) {
     GooString* fileName;
     GooString* ownerPW, *userPW;
 
