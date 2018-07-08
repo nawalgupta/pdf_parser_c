@@ -196,14 +196,48 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
             if (title_prefix) {
                 // case 1: prefix is in following format: bullet/numbering space single/double quote
                 // step 1: find first word, using regex to match, check if it is bullet or numbering
+                unsigned int pos = 0;
+                std::string_view title_prefix_view(title_prefix.value());;
+                unsigned int p_length = title_prefix_view.length();
+                for (unsigned int i = 0; i < p_length; ++i) {
+                    if (std::isspace(title_prefix_view[i])) {
+                        pos = i;
+                        break;
+                    }
+                }
 
-                // step 2: next character after space must be ' or "
-//                if (std::regex_match(title_prefix.value(), title_prefix_match_result, std::regex("^[\\*\\+\\-]\\s"))) {
-//                    TitleFormat title_format;
-//                    title_format.prefix = TitleFormat::PREFIX::BULLET;
-//                    text_block_information->title_format = std::move(title_format);
-//                }
+                // TODO: process from here
+                if (pos > 0) {
+                    // check if the rest is single quote/double quoute
+                    std::string_view the_rest_title_prefix_view(title_prefix_view.substr(pos + 1, p_length - pos));
+                    if (the_rest_title_prefix_view.compare("'") == 0 ||
+                        the_rest_title_prefix_view.compare("\"") == 0) {
 
+                        std::string first_word_title_prefix_view(title_prefix_view.substr(0, pos));
+
+                        // bullet match
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("[\\*\\+\\-]"))) {
+
+                        }
+                        // numbering using latin characters (a) (b) (c)
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\([a-z]{1}\\)"))) {
+
+                        }
+                        // numbering using roman numerals (i), longest presentation might be (xviii)
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\([ivx]{1,5}\\)"))) {
+
+                        }
+                        // numbering using number with dots ex 1 2 3 or 1. 2. 3. or 1.1 1.2 1.3 or 1.1. 1.2. 1.3.
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\d+(\\.\\d+)*\\.?"))) {
+
+                        }
+                    }
+                } else { // no space in prefix
+                    if (title_prefix_view.compare("'") == 0 ||
+                        title_prefix_view.compare("\"") == 0) {
+
+                    }
+                }
             } else {
                 // case 2: no prefix: first emphasize word is in begining of the block, the character after first emphasized word must be colon or space
                 unsigned int pos = text_block_information->emphasized_words.front().length();
@@ -231,15 +265,6 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
         }
     }
 
-
-//        if (title_prefix && std::regex_match(title_prefix.value(), title_prefix_match_result, std::regex())) {
-//            TitleFormat title_format;
-////            title_format.font_size = 16;
-//            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
-//            text_block_information->title_format = std::move(title_format);
-//        }
-
-
 //        // TODO: find text before the first emphasized word and match with faster regex lib (eg: boost.regex) instead of std regex
 //        std::smatch title_match_result;
 //        if (!text_block_information->emphasized_words.empty() &&
@@ -251,7 +276,6 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
 ////                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + "\".*"))))
 //        {
 //            TitleFormat title_format;
-////            title_format.font_size = 16;
 //            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
 //            text_block_information->title_format = std::move(title_format);
 //        }
