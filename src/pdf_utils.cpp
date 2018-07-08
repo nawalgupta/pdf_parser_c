@@ -31,7 +31,7 @@ bool TitleFormat::operator ==(const TitleFormat& title_format) {
            title_case == title_format.title_case &&
            prefix == title_format.prefix &&
            emphasize_style == title_format.emphasize_style &&
-           prefix_format.compare(title_format.prefix_format) == 0 &&
+           numbering_level == numbering_level &&
            !(same_line_with_content ^ title_format.same_line_with_content) &&
            std::fabs(indent - title_format.indent) <= INDENT_DELTA ;
 }
@@ -41,7 +41,7 @@ bool TitleFormat::operator !=(const TitleFormat& title_format) {
            title_case != title_format.title_case ||
            prefix != title_format.prefix ||
            emphasize_style != title_format.emphasize_style ||
-           prefix_format.compare(title_format.prefix_format) != 0 ||
+           numbering_level != numbering_level ||
            (same_line_with_content ^ title_format.same_line_with_content) ||
            std::fabs(indent - title_format.indent) > INDENT_DELTA;
 }
@@ -52,7 +52,7 @@ TitleFormat::TitleFormat() {
 
 TitleFormat::TitleFormat(const TitleFormat& other) :
     gfx_font(other.gfx_font),
-    prefix_format(other.prefix_format),
+    numbering_level(other.numbering_level),
     title_case(other.title_case),
     prefix(other.prefix),
     emphasize_style(other.emphasize_style),
@@ -63,7 +63,7 @@ TitleFormat::TitleFormat(const TitleFormat& other) :
 
 TitleFormat::TitleFormat(TitleFormat&& other) :
     gfx_font(other.gfx_font),
-    prefix_format(std::move(other.prefix_format)),
+    numbering_level(numbering_level),
     title_case(other.title_case),
     prefix(other.prefix),
     emphasize_style(other.emphasize_style),
@@ -74,7 +74,7 @@ TitleFormat::TitleFormat(TitleFormat&& other) :
 
 TitleFormat& TitleFormat::operator=(const TitleFormat& other) {
     gfx_font = other.gfx_font;
-    prefix_format = other.prefix_format;
+    numbering_level = other.numbering_level;
     title_case = other.title_case;
     prefix = other.prefix;
     emphasize_style = other.emphasize_style;
@@ -85,7 +85,7 @@ TitleFormat& TitleFormat::operator=(const TitleFormat& other) {
 
 TitleFormat& TitleFormat::operator=(TitleFormat&& other) {
     gfx_font = other.gfx_font;
-    prefix_format = std::move(other.prefix_format);
+    numbering_level = other.numbering_level;
     title_case = other.title_case;
     prefix = other.prefix;
     emphasize_style = other.emphasize_style;
@@ -114,10 +114,8 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                 delete text_word;
             }
             line_string.pop_back();
-            // TODO: match using faster regex lib (eg: boost.regex)
             if (std::regex_match(line_string, page_number_regex_match, page_number_regex)) {
                 text_block_information->is_page_number = true;
-//                std::cout << "Document page number: " << line_string << std::endl;
             }
         }
     } else if (yMinA < y0) {
@@ -189,8 +187,6 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
 
         if (!text_block_information->emphasized_words.empty() &&
             text_block_information->emphasized_words.front().length() < title_max_length) {
-            std::regex special_characters {R"([-[\]{}()*+?.,\^$|#\s])"};
-            std::string replace_rule(R"(\$&)");
             std::smatch title_prefix_match_result;
 
             if (title_prefix) {
@@ -206,36 +202,125 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                     }
                 }
 
-                // TODO: process from here
                 if (pos > 0) {
                     // check if the rest is single quote/double quoute
                     std::string_view the_rest_title_prefix_view(title_prefix_view.substr(pos + 1, p_length - pos));
-                    if (the_rest_title_prefix_view.compare("'") == 0 ||
-                        the_rest_title_prefix_view.compare("\"") == 0) {
-
+                    if (the_rest_title_prefix_view.empty()) {
                         std::string first_word_title_prefix_view(title_prefix_view.substr(0, pos));
 
                         // bullet match
                         if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("[\\*\\+\\-]"))) {
-
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::BULLET;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
+                            text_block_information->title_format = std::move(title_format);
                         }
                         // numbering using latin characters (a) (b) (c)
                         if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\([a-z]{1}\\)"))) {
-
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::ALPHABET_NUMBERING;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
+                            text_block_information->title_format = std::move(title_format);
                         }
                         // numbering using roman numerals (i), longest presentation might be (xviii)
                         if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\([ivx]{1,5}\\)"))) {
-
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::ROMAN_NUMBERING;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
+                            text_block_information->title_format = std::move(title_format);
                         }
                         // numbering using number with dots ex 1 2 3 or 1. 2. 3. or 1.1 1.2 1.3 or 1.1. 1.2. 1.3.
                         if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\d+(\\.\\d+)*\\.?"))) {
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::NUMBER_DOT_NUMBERING;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
+                            text_block_information->title_format = std::move(title_format);
+                        }
+                    } else if (the_rest_title_prefix_view.compare("'") == 0 &&
+                               text_block_information->partial_paragraph_content[text_block_information->emphasized_words.front().length() + title_prefix_view.length()] == '\'') {
+                        std::string first_word_title_prefix_view(title_prefix_view.substr(0, pos));
 
+                        // bullet match
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("[\\*\\+\\-]"))) {
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::BULLET;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::SINGLE_QUOTE;
+                            text_block_information->title_format = std::move(title_format);
+                        }
+                        // numbering using latin characters (a) (b) (c)
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\([a-z]{1}\\)"))) {
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::ALPHABET_NUMBERING;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::SINGLE_QUOTE;
+                            text_block_information->title_format = std::move(title_format);
+                        }
+                        // numbering using roman numerals (i), longest presentation might be (xviii)
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\([ivx]{1,5}\\)"))) {
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::ROMAN_NUMBERING;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::SINGLE_QUOTE;
+                            text_block_information->title_format = std::move(title_format);
+                        }
+                        // numbering using number with dots ex 1 2 3 or 1. 2. 3. or 1.1 1.2 1.3 or 1.1. 1.2. 1.3.
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\d+(\\.\\d+)*\\.?"))) {
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::NUMBER_DOT_NUMBERING;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::SINGLE_QUOTE;
+                            text_block_information->title_format = std::move(title_format);
+                        }
+                    } else if (the_rest_title_prefix_view.compare("\"") == 0 &&
+                               text_block_information->partial_paragraph_content[text_block_information->emphasized_words.front().length() + title_prefix_view.length()] == '\"') {
+                        std::string first_word_title_prefix_view(title_prefix_view.substr(0, pos));
+
+                        // bullet match
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("[\\*\\+\\-]"))) {
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::BULLET;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::DOUBLE_QUOTE;
+                            text_block_information->title_format = std::move(title_format);
+                        }
+                        // numbering using latin characters (a) (b) (c)
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\([a-z]{1}\\)"))) {
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::ALPHABET_NUMBERING;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::DOUBLE_QUOTE;
+                            text_block_information->title_format = std::move(title_format);
+                        }
+                        // numbering using roman numerals (i), longest presentation might be (xviii)
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\([ivx]{1,5}\\)"))) {
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::ROMAN_NUMBERING;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::DOUBLE_QUOTE;
+                            text_block_information->title_format = std::move(title_format);
+                        }
+                        // numbering using number with dots ex 1 2 3 or 1. 2. 3. or 1.1 1.2 1.3 or 1.1. 1.2. 1.3.
+                        if (std::regex_match(first_word_title_prefix_view, title_prefix_match_result, std::regex("\\d+(\\.\\d+)*\\.?"))) {
+                            TitleFormat title_format;
+                            title_format.prefix = TitleFormat::PREFIX::NUMBER_DOT_NUMBERING;
+                            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::DOUBLE_QUOTE;
+                            text_block_information->title_format = std::move(title_format);
                         }
                     }
                 } else { // no space in prefix
-                    if (title_prefix_view.compare("'") == 0 ||
-                        title_prefix_view.compare("\"") == 0) {
+                    if (title_prefix_view.compare("'") == 0 &&
+                        text_block_information->partial_paragraph_content[text_block_information->emphasized_words.front().length() + 1] == '\'') {
+                        TitleFormat title_format;
+                        title_format.prefix = TitleFormat::PREFIX::NONE;
+                        title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::SINGLE_QUOTE;
+                        text_block_information->title_format = std::move(title_format);
+                    } else if (title_prefix_view.compare("\"") == 0 &&
+                               text_block_information->partial_paragraph_content[text_block_information->emphasized_words.front().length() + 1] == '\"') {
+                        TitleFormat title_format;
+                        title_format.prefix = TitleFormat::PREFIX::NONE;
+                        title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::DOUBLE_QUOTE;
+                        text_block_information->title_format = std::move(title_format);
+                    }
+                }
 
+                if (text_block_information->title_format) {
+                    text_block_information->partial_paragraph_content.erase(0, text_block_information->emphasized_words.front().length() + title_prefix_view.length());
+                    if (text_block_information->title_format->emphasize_style > TitleFormat::EMPHASIZE_STYLE::NONE) {
+                        text_block_information->partial_paragraph_content.erase(0, 1);
                     }
                 }
             } else {
@@ -245,6 +330,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                 if (pos == p_length) {
                     TitleFormat title_format;
                     title_format.prefix = TitleFormat::PREFIX::NONE;
+                    title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
                     title_format.same_line_with_content = false;
                     text_block_information->title_format = std::move(title_format);
 
@@ -255,6 +341,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                             text_block_information->partial_paragraph_content[pos] == ':')) {
                     TitleFormat title_format;
                     title_format.prefix = TitleFormat::PREFIX::NONE;
+                    title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
                     title_format.same_line_with_content = true;
                     text_block_information->title_format = std::move(title_format);
 
@@ -264,21 +351,6 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
             }
         }
     }
-
-//        // TODO: find text before the first emphasized word and match with faster regex lib (eg: boost.regex) instead of std regex
-//        std::smatch title_match_result;
-//        if (!text_block_information->emphasized_words.empty() &&
-//            std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^(((\\d+(\\.\\d+)*\\.?)|[\\*\\+\\-]|(\\([a-z]{1,4}\\)))\\s+\"?)?" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")))
-////            (   std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-////                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\d+(\\.\\d+)*\\.?\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-////                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\\([a-z]{1,4}\\)\\s+" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-////                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^[\\*\\+\\-]\\s" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + ".*")) ||
-////                std::regex_match(text_block_information->partial_paragraph_content, title_match_result, std::regex("^\"" + std::regex_replace(text_block_information->emphasized_words.front(), special_characters, replace_rule) + "\".*"))))
-//        {
-//            TitleFormat title_format;
-//            title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
-//            text_block_information->title_format = std::move(title_format);
-//        }
 
     return text_block_information;
 }

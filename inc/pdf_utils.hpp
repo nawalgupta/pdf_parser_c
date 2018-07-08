@@ -37,14 +37,14 @@ struct TitleFormat {
         static const double INDENT_DELTA;
 
         enum class CASE {ALL_UPPER, FIRST_ONLY_UPPER, ALL_LOWER};
-        enum class PREFIX {NONE, BULLET, NUMBERING};
+        enum class PREFIX {NONE, BULLET, ROMAN_NUMBERING, NUMBER_DOT_NUMBERING, ALPHABET_NUMBERING};
         enum class EMPHASIZE_STYLE {NONE, SINGLE_QUOTE, DOUBLE_QUOTE};
 
         GfxFont *gfx_font;
         CASE title_case;
         PREFIX prefix;
         EMPHASIZE_STYLE emphasize_style;
-        std::string prefix_format;
+        unsigned int numbering_level;
         bool same_line_with_content;
         double indent;
 
