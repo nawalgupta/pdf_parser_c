@@ -186,6 +186,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
         }
 
         if (!text_block_information->emphasized_words.empty() &&
+            !is_all_lower_case(text_block_information->emphasized_words.front()) &&
             text_block_information->emphasized_words.front().length() < title_max_length) {
             std::smatch title_prefix_match_result;
 
