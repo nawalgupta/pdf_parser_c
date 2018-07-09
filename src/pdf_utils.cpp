@@ -31,7 +31,7 @@ bool TitleFormat::operator ==(const TitleFormat& title_format) {
            title_case == title_format.title_case &&
            prefix == title_format.prefix &&
            emphasize_style == title_format.emphasize_style &&
-           numbering_level == numbering_level &&
+           numbering_level == title_format.numbering_level &&
            !(same_line_with_content ^ title_format.same_line_with_content) &&
            std::fabs(indent - title_format.indent) <= INDENT_DELTA ;
 }
@@ -41,7 +41,7 @@ bool TitleFormat::operator !=(const TitleFormat& title_format) {
            title_case != title_format.title_case ||
            prefix != title_format.prefix ||
            emphasize_style != title_format.emphasize_style ||
-           numbering_level != numbering_level ||
+           numbering_level != title_format.numbering_level ||
            (same_line_with_content ^ title_format.same_line_with_content) ||
            std::fabs(indent - title_format.indent) > INDENT_DELTA;
 }
@@ -63,7 +63,7 @@ TitleFormat::TitleFormat(const TitleFormat& other) :
 
 TitleFormat::TitleFormat(TitleFormat&& other) :
     gfx_font(other.gfx_font),
-    numbering_level(numbering_level),
+    numbering_level(other.numbering_level),
     title_case(other.title_case),
     prefix(other.prefix),
     emphasize_style(other.emphasize_style),
