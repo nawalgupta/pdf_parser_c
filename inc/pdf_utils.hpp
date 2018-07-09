@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <regex>
+#include <algorithm>
 #include <poppler-config.h>
 #include <goo/GooString.h>
 #include <goo/gmem.h>
@@ -36,7 +37,7 @@
 struct TitleFormat {
         static const double INDENT_DELTA;
 
-        enum class CASE {ALL_UPPER, FIRST_ONLY_UPPER, ALL_LOWER};
+        enum class CASE {ALL_UPPER, FIRST_ONLY_UPPER};
         enum class PREFIX {NONE, BULLET, ROMAN_NUMBERING, NUMBER_DOT_NUMBERING, ALPHABET_NUMBERING};
         enum class EMPHASIZE_STYLE {NONE, SINGLE_QUOTE, DOUBLE_QUOTE};
 
@@ -116,6 +117,14 @@ inline std::string rtrim_copy(std::string s) {
 inline std::string trim_copy(std::string s) {
     trim(s);
     return s;
+}
+
+inline bool is_all_upper_case(std::string& s) {
+    return std::none_of(s.begin(), s.end(), [](int ch) { return std::islower(ch);});
+}
+
+inline bool is_all_lower_case(std::string& s) {
+    return std::none_of(s.begin(), s.end(), [](int ch) { return std::isupper(ch);});
 }
 
 // convert Unicode character to UTF-8 encoded string

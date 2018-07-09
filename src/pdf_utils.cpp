@@ -349,6 +349,14 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                     text_block_information->partial_paragraph_content = text_block_information->partial_paragraph_content.substr(pos + 1);
                 }
             }
+
+            if (text_block_information->title_format) {
+                if (is_all_upper_case(text_block_information->emphasized_words.front())) {
+                    text_block_information->title_format->title_case = TitleFormat::CASE::ALL_UPPER;
+                } else {
+                    text_block_information->title_format->title_case = TitleFormat::CASE::FIRST_ONLY_UPPER;
+                }
+            }
         }
     }
 
