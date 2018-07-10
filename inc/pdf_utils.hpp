@@ -120,11 +120,11 @@ inline std::string trim_copy(std::string s) {
 }
 
 inline bool is_all_upper_case(std::string& s) {
-    return std::none_of(s.begin(), s.end(), [](int ch) { return std::islower(ch);});
+    return std::none_of(s.begin(), s.end(), &::islower);
 }
 
 inline bool is_all_lower_case(std::string& s) {
-    return std::none_of(s.begin(), s.end(), [](int ch) { return std::isupper(ch);});
+    return std::none_of(s.begin(), s.end(), &isupper);
 }
 
 // convert Unicode character to UTF-8 encoded string
