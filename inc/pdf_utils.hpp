@@ -45,7 +45,7 @@ struct TitleFormat {
         CASE title_case;
         PREFIX prefix;
         EMPHASIZE_STYLE emphasize_style;
-        unsigned int numbering_level;
+        unsigned int numbering_level = 0;
         bool same_line_with_content;
         double indent;
 
@@ -73,12 +73,19 @@ struct TextBlockInformation {
 
 struct PDFSection {
     std::string title;
+    TitleFormat title_format;
     std::string content;
     std::list<std::string> emphasized_words;
 };
 
 struct PDFDocument {
     std::list<PDFSection> sections;
+};
+
+struct DocumentNode {
+    PDFSection* main_section;
+    std::optional<std::list<DocumentNode*>> sub_sections;
+    DocumentNode* parent_node;
 };
 
 // trim from start (in place)

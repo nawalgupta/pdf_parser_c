@@ -100,6 +100,7 @@ int main(int argc, char* argv[]) {
                             }
 
                             pdf_section.title = text_block_information->emphasized_words.front();
+                            pdf_section.title_format = text_block_information->title_format.value();
                             text_block_information->emphasized_words.pop_front();
                             pdf_section.emphasized_words = text_block_information->emphasized_words;
                             pdf_section.content = text_block_information->partial_paragraph_content;
@@ -120,6 +121,22 @@ int main(int argc, char* argv[]) {
         if (pdf_section.title.length() > 0) {
             trim(pdf_section.content);
             pdf_document.sections.push_back(pdf_section);
+        }
+
+        // all sections in a list, construct a tree from pdf_document.sections
+        DocumentNode doc_root;
+        doc_root.main_section = nullptr;
+        doc_root.parent_node = nullptr;
+        std::list<TitleFormat> title_format_stack;
+        for (PDFSection section : pdf_document.sections) {
+            // if this section's title format hasn't appear in title_format_stack
+            std::list<TitleFormat>::iterator it = std::find(title_format_stack.begin(), title_format_stack.end(), section.title_format);
+            if (it == title_format_stack.end()) {
+                std::cout << "Not exist " << section.title << std::endl;
+            } else {
+                std::cout << "Exist" << std::endl;
+            }
+            title_format_stack.push_back(section.title_format);
         }
 
         // Save pdf_document to json file
