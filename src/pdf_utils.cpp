@@ -103,6 +103,8 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
 
     // check if text block is page number
     double xMinA, xMaxA, yMinA, yMaxA;
+    double txMinA, txMaxA, tyMinA, tyMaxA; // for title's first character
+    std::optional<double> title_indent, title_baseline;
     text_block->getBBox(&xMinA, &yMinA, &xMaxA, &yMaxA);
     std::regex page_number_regex("^.{0,2}[0-9]+.{0,2}");
     std::smatch page_number_regex_match;
@@ -154,8 +156,15 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                         if (word->getFontInfo(i)->gfxFont->getWeight() > GfxFont::W400 || word->getFontInfo(i)->isItalic()) {
                             parsing_emphasized_word = true;
                             // first time this occured
-                            if (!title_prefix && !partial_paragraph_content_string_stream.str().empty()) {
-                                title_prefix = partial_paragraph_content_string_stream.str();
+                            if (!title_prefix) {
+                                // update txMinA & tyMaxA of this character to use later, txMinA is indent, tyMaxA is baseline to determine is_same_line later
+                                word->getCharBBox(i, &txMinA, &tyMinA, &txMaxA, &tyMaxA);
+                                title_indent = txMinA;
+                                title_baseline = tyMaxA;
+
+                                if (!partial_paragraph_content_string_stream.str().empty()) {
+                                    title_prefix = partial_paragraph_content_string_stream.str();
+                                }
                             }
                             emphasized_word_string_stream << character;
                         } else if (parsing_emphasized_word) {
@@ -334,7 +343,6 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                     TitleFormat title_format;
                     title_format.prefix = TitleFormat::PREFIX::NONE;
                     title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
-                    title_format.same_line_with_content = false;
                     text_block_information->title_format = std::move(title_format);
 
                     // cut title out of content
@@ -345,7 +353,6 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                     TitleFormat title_format;
                     title_format.prefix = TitleFormat::PREFIX::NONE;
                     title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
-                    title_format.same_line_with_content = true;
                     text_block_information->title_format = std::move(title_format);
 
                     // cut title out of content
@@ -354,11 +361,15 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
             }
 
             if (text_block_information->title_format) {
+                // case
                 if (is_all_upper_case(text_block_information->emphasized_words.front())) {
                     text_block_information->title_format->title_case = TitleFormat::CASE::ALL_UPPER;
                 } else {
                     text_block_information->title_format->title_case = TitleFormat::CASE::FIRST_ONLY_UPPER;
                 }
+
+                // indentation
+                text_block_information->title_format->indent = title_indent.value();
             }
         }
     }
