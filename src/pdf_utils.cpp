@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <iostream>
 
-const double TitleFormat::INDENT_DELTA = TITLE_FORMAT_INDENT_DELTA;
+const double TitleFormat::INDENT_DELTA_THRESHOLD = TITLE_FORMAT_INDENT_DELTA;
 
 static inline std::string UnicodeToUTF8(Unicode codepoint) {
     std::string out;
@@ -33,7 +33,9 @@ bool TitleFormat::operator ==(const TitleFormat& title_format) {
            emphasize_style == title_format.emphasize_style &&
            numbering_level == title_format.numbering_level &&
            !(same_line_with_content ^ title_format.same_line_with_content) &&
-           std::fabs(indent - title_format.indent) <= INDENT_DELTA ;
+               (title_case == TitleFormat::CASE::ALL_UPPER ||  // indent doesn't affect style since text is centered
+                   (title_case == TitleFormat::CASE::FIRST_ONLY_UPPER &&
+                    std::fabs(indent - title_format.indent) <= INDENT_DELTA_THRESHOLD));
 }
 
 bool TitleFormat::operator !=(const TitleFormat& title_format) {
@@ -43,11 +45,11 @@ bool TitleFormat::operator !=(const TitleFormat& title_format) {
            emphasize_style != title_format.emphasize_style ||
            numbering_level != title_format.numbering_level ||
            (same_line_with_content ^ title_format.same_line_with_content) ||
-           std::fabs(indent - title_format.indent) > INDENT_DELTA;
+               (title_case == TitleFormat::CASE::FIRST_ONLY_UPPER &&
+                std::fabs(indent - title_format.indent) > INDENT_DELTA_THRESHOLD);
 }
 
 TitleFormat::TitleFormat() {
-
 }
 
 TitleFormat::TitleFormat(const TitleFormat& other) :

@@ -35,7 +35,7 @@
 #endif
 
 struct TitleFormat {
-        static const double INDENT_DELTA;
+        static const double INDENT_DELTA_THRESHOLD;
 
         enum class CASE {ALL_UPPER, FIRST_ONLY_UPPER};
         enum class PREFIX {NONE, BULLET, ROMAN_NUMBERING, NUMBER_DOT_NUMBERING, ALPHABET_NUMBERING};
@@ -49,10 +49,6 @@ struct TitleFormat {
         bool same_line_with_content;
         double indent;
 
-        bool operator==(const TitleFormat& title_format);
-
-        bool operator!=(const TitleFormat& title_format);
-
         TitleFormat();
 
         TitleFormat(const TitleFormat& other);
@@ -62,6 +58,10 @@ struct TitleFormat {
         TitleFormat& operator=(const TitleFormat& other);
 
         TitleFormat& operator=(TitleFormat&& other);
+
+        bool operator==(const TitleFormat& title_format);
+
+        bool operator!=(const TitleFormat& title_format);
 };
 
 struct TextBlockInformation {
