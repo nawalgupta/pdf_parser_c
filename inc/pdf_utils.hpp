@@ -31,8 +31,23 @@
 #include <GfxFont.h>
 
 #ifndef TITLE_FORMAT_INDENT_DELTA
-#define TITLE_FORMAT_INDENT_DELTA 0.1
+#define TITLE_FORMAT_INDENT_DELTA 0.2
 #endif
+
+static const char *fontTypeNames[] = {
+  "unknown",
+  "Type 1",
+  "Type 1C",
+  "Type 1C (OT)",
+  "Type 3",
+  "TrueType",
+  "TrueType (OT)",
+  "CID Type 0",
+  "CID Type 0C",
+  "CID Type 0C (OT)",
+  "CID TrueType",
+  "CID TrueType (OT)"
+};
 
 struct TitleFormat {
         static const double INDENT_DELTA_THRESHOLD;
@@ -41,12 +56,12 @@ struct TitleFormat {
         enum class PREFIX {NONE, BULLET, ROMAN_NUMBERING, NUMBER_DOT_NUMBERING, ALPHABET_NUMBERING};
         enum class EMPHASIZE_STYLE {NONE, SINGLE_QUOTE, DOUBLE_QUOTE};
 
-        GfxFont *gfx_font;
+        Ref font_ref;
         CASE title_case;
         PREFIX prefix;
         EMPHASIZE_STYLE emphasize_style;
         unsigned int numbering_level = 0;
-        bool same_line_with_content;
+        bool same_line_with_content = true;
         double indent;
 
         TitleFormat();
@@ -62,6 +77,8 @@ struct TitleFormat {
         bool operator==(const TitleFormat& title_format);
 
         bool operator!=(const TitleFormat& title_format);
+
+        friend std::ostream& operator<<(std::ostream& os, const TitleFormat& tf);
 };
 
 struct TextBlockInformation {

@@ -23,6 +23,7 @@
 #include <cctype>
 #include <locale>
 #include <nlohmann/json.hpp>
+#include <FontInfo.h>
 #include "pdf_utils.hpp"
 
 int main(int argc, char* argv[]) {
@@ -56,15 +57,41 @@ int main(int argc, char* argv[]) {
         globalParams = new GlobalParams();
 //        globalParams->setTextPageBreaks(gTrue);
 //        globalParams->setErrQuiet(gFalse);
-
+        int number_of_pages = doc->getNumPages();
 
         PDFDocument pdf_document;
         PDFSection pdf_section;
         bool start_parse = false;
+        FontInfoScanner font_info_scanner(doc);
+        GooList *fonts = font_info_scanner.scan(number_of_pages);
+        // print the font info
+        printf("List fonts used:\n");
+        printf("name                                 type              encoding         emb sub uni object ID\n");
+        printf("------------------------------------ ----------------- ---------------- --- --- --- ---------\n");
+        if (fonts) {
+          for (int i = 0; i < fonts->getLength(); ++i) {
+            FontInfo *font = (FontInfo *)fonts->get(i);
+            printf("%-36s %-17s %-16s %-3s %-3s %-3s",
+                   font->getName() ? font->getName()->getCString() : "[none]",
+                   fontTypeNames[font->getType()],
+                   font->getEncoding()->getCString(),
+                   font->getEmbedded() ? "yes" : "no",
+                   font->getSubset() ? "yes" : "no",
+                   font->getToUnicode() ? "yes" : "no");
+            const Ref fontRef = font->getRef();
+            if (fontRef.gen >= 100000) {
+              printf(" [none]\n");
+            } else {
+              printf(" %6d %2d\n", fontRef.num, fontRef.gen);
+            }
+            delete font;
+          }
+          delete fonts;
+        }
 
-        std::cout << "Processing " << doc->getNumPages() << " pages of " << argv[1] << std::endl;
+        std::cout << "Parsing " << number_of_pages << " pages of " << argv[1] << std::endl;
 
-        for (int page = 1; page <= doc->getNumPages(); ++page) {
+        for (int page = 1; page <= number_of_pages; ++page) {
             PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
             double y0 = page_mediabox->y2 - page_footer_height;
             doc->displayPage(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse);
@@ -131,12 +158,14 @@ int main(int argc, char* argv[]) {
         for (PDFSection section : pdf_document.sections) {
             // if this section's title format hasn't appear in title_format_stack
             std::list<TitleFormat>::iterator it = std::find(title_format_stack.begin(), title_format_stack.end(), section.title_format);
+
             if (it == title_format_stack.end()) {
                 std::cout << "Not exist " << section.title << std::endl;
+                std::cout << "Title format: " << section.title_format;
+                title_format_stack.push_back(section.title_format);
             } else {
                 std::cout << "Exist" << std::endl;
             }
-            title_format_stack.push_back(section.title_format);
         }
 
         // Save pdf_document to json file

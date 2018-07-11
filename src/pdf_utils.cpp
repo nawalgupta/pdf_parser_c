@@ -27,33 +27,35 @@ static inline std::string UnicodeToUTF8(Unicode codepoint) {
 }
 
 bool TitleFormat::operator ==(const TitleFormat& title_format) {
-    return gfx_font == title_format.gfx_font &&
+    return font_ref.num == title_format.font_ref.num &&
            title_case == title_format.title_case &&
            prefix == title_format.prefix &&
            emphasize_style == title_format.emphasize_style &&
            numbering_level == title_format.numbering_level &&
-           !(same_line_with_content ^ title_format.same_line_with_content) &&
-               (title_case == TitleFormat::CASE::ALL_UPPER ||  // indent doesn't affect style since text is centered
-                   (title_case == TitleFormat::CASE::FIRST_ONLY_UPPER &&
-                    std::fabs(indent - title_format.indent) <= INDENT_DELTA_THRESHOLD));
+           !(same_line_with_content ^ title_format.same_line_with_content);
+//    &&
+//               (title_case == TitleFormat::CASE::ALL_UPPER ||  // indent doesn't affect style since text is centered
+//                   (title_case == TitleFormat::CASE::FIRST_ONLY_UPPER &&
+//                    std::fabs(indent - title_format.indent) <= INDENT_DELTA_THRESHOLD));
 }
 
 bool TitleFormat::operator !=(const TitleFormat& title_format) {
-    return gfx_font != title_format.gfx_font ||
+    return font_ref.num != title_format.font_ref.num ||
            title_case != title_format.title_case ||
            prefix != title_format.prefix ||
            emphasize_style != title_format.emphasize_style ||
            numbering_level != title_format.numbering_level ||
-           (same_line_with_content ^ title_format.same_line_with_content) ||
-               (title_case == TitleFormat::CASE::FIRST_ONLY_UPPER &&
-                std::fabs(indent - title_format.indent) > INDENT_DELTA_THRESHOLD);
+           (same_line_with_content ^ title_format.same_line_with_content);
+//    ||
+//               (title_case == TitleFormat::CASE::FIRST_ONLY_UPPER &&
+//                std::fabs(indent - title_format.indent) > INDENT_DELTA_THRESHOLD);
 }
 
 TitleFormat::TitleFormat() {
 }
 
 TitleFormat::TitleFormat(const TitleFormat& other) :
-    gfx_font(other.gfx_font),
+    font_ref(other.font_ref),
     numbering_level(other.numbering_level),
     title_case(other.title_case),
     prefix(other.prefix),
@@ -64,7 +66,7 @@ TitleFormat::TitleFormat(const TitleFormat& other) :
 }
 
 TitleFormat::TitleFormat(TitleFormat&& other) :
-    gfx_font(other.gfx_font),
+    font_ref(other.font_ref),
     numbering_level(other.numbering_level),
     title_case(other.title_case),
     prefix(other.prefix),
@@ -75,7 +77,7 @@ TitleFormat::TitleFormat(TitleFormat&& other) :
 }
 
 TitleFormat& TitleFormat::operator=(const TitleFormat& other) {
-    gfx_font = other.gfx_font;
+    font_ref = other.font_ref;
     numbering_level = other.numbering_level;
     title_case = other.title_case;
     prefix = other.prefix;
@@ -86,7 +88,7 @@ TitleFormat& TitleFormat::operator=(const TitleFormat& other) {
 }
 
 TitleFormat& TitleFormat::operator=(TitleFormat&& other) {
-    gfx_font = other.gfx_font;
+    font_ref = other.font_ref;
     numbering_level = other.numbering_level;
     title_case = other.title_case;
     prefix = other.prefix;
@@ -96,6 +98,16 @@ TitleFormat& TitleFormat::operator=(TitleFormat&& other) {
     return *this;
 }
 
+std::ostream& operator<<(std::ostream& os, const TitleFormat& tf) {
+    os << "\nFont ref: " << tf.font_ref.num << " " << tf.font_ref.gen
+       << "\nTitle case: " << static_cast<unsigned int>(tf.title_case)
+       << "\nTitle prefix: " << static_cast<unsigned int>(tf.prefix)
+       << "\nEmphasize style: " << static_cast<unsigned int>(tf.emphasize_style)
+       << "\nNumbering level: " << tf.numbering_level
+       << "\nIs same line with content: " << tf.same_line_with_content
+       << "\nIndent: " << tf.indent << std::endl;
+    return os;
+}
 
 // extract text block information from text block
 TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool analyze_page_number, double y0, unsigned int title_max_length)  {
@@ -104,6 +116,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
     // check if text block is page number
     double xMinA, xMaxA, yMinA, yMaxA;
     double txMinA, txMaxA, tyMinA, tyMaxA; // for title's first character
+    Ref font_ref;
     std::optional<double> title_indent, title_baseline;
     text_block->getBBox(&xMinA, &yMinA, &xMaxA, &yMaxA);
     std::regex page_number_regex("^.{0,2}[0-9]+.{0,2}");
@@ -161,6 +174,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                                 word->getCharBBox(i, &txMinA, &tyMinA, &txMaxA, &tyMaxA);
                                 title_indent = txMinA;
                                 title_baseline = tyMaxA;
+                                font_ref = *(word->getFontInfo(i)->gfxFont->getID());
 
                                 if (!partial_paragraph_content_string_stream.str().empty()) {
                                     title_prefix = partial_paragraph_content_string_stream.str();
@@ -343,6 +357,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                     TitleFormat title_format;
                     title_format.prefix = TitleFormat::PREFIX::NONE;
                     title_format.emphasize_style = TitleFormat::EMPHASIZE_STYLE::NONE;
+                    title_format.same_line_with_content = false;
                     text_block_information->title_format = std::move(title_format);
 
                     // cut title out of content
@@ -364,12 +379,16 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                 // case
                 if (is_all_upper_case(text_block_information->emphasized_words.front())) {
                     text_block_information->title_format->title_case = TitleFormat::CASE::ALL_UPPER;
+                    text_block_information->title_format->same_line_with_content = false;
                 } else {
                     text_block_information->title_format->title_case = TitleFormat::CASE::FIRST_ONLY_UPPER;
                 }
 
                 // indentation
                 text_block_information->title_format->indent = title_indent.value();
+
+                // font ref
+                text_block_information->title_format->font_ref = font_ref;
             }
         }
     }
