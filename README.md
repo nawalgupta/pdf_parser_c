@@ -4,58 +4,34 @@ This program extract pdf file, save data to json file to use later. It use poppl
 
 [PDF Implementation Reference](https://www.adobe.com/content/dam/acom/en/devnet/pdf/pdfs/pdf_reference_archives/PDFReference.pdf)
 
-To checkout:
-```commandline
-git clone https://github.com/robinson0812/pdf_parser_c pdf_reader
-```
+Step 1:
+- checkout pdf_reader source code
+  
 
-Due to bug [pdftotext only outputs first page content with -bbox-layout option](https://bugs.freedesktop.org/show_bug.cgi?id=93344), after checkout poppler submodule, apply patch to fix:
+Step 2:
+- install poppler-data and poppler at [freedesktop git](https://anongit.freedesktop.org/git/poppler/)
+  - checkout poppler-data
+  - install poppler-data
+  - checkout poppler
+  - Due to bug [pdftotext only outputs first page content with -bbox-layout option](https://bugs.freedesktop.org/show_bug.cgi?id=93344), apply patch to fix: `git apply poppler.patch`, poppler.patch is in pdf_reader checkout folder
+  - run cmake using following configuration: `cmake poppler_checkout_directory -DCMAKE_BUILD_TYPE=Release -DENABLE_XPDF_HEADERS=ON`
+  - (optional) install packages: `sudo apt install libfreetype6-dev libfontconfig1-dev libnss3-dev libjpeg-dev libopenjp2-7-dev` or config to disable all of it. You can use cmake-gui and disable all additional features easily
+  - make test and make install
 
+Step 3:
+- checkout, config, make and install nlohmann/json
 
-```commandline
-cd poppler
-git apply poppler.patch
-```
+Step 4: 
+- config and make pdf_reader
 
-Then build and verify poppler with command:
-```commandline
-sudo apt install libfreetype6-dev libfontconfig1-dev libnss3-dev libjpeg-dev libopenjp2-7-dev
-cd ..
-mkdir poppler-build
-cd poppler-build
-cmake ../pdf_reader/poppler -DCMAKE_BUILD_TYPE=Release -DTESTDATADIR=../pdf_reader/poppler-test -DENABLE_XPDF_HEADERS=ON
-make
-make test
-sudo make install
-cd ..
-mkdir poppler-data-build
-cmake ../pdf_reader/poppler-data
-make
-sudo make install
-```
-
-Copy poppler config header to source folder
-```commandline
-cp -vf ../poppler-build/config.h poppler-header
-cp -vf ../poppler-build/poppler-config.h poppler-header
-```
-
-Build project
-```commandline
-cd ..
-mkdir -p pdf_reader-build
-cd pdf_reader-build
-cmake ../pdf_reader -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
-make
-sudo cp -v pdf_reader /usr/bin
-```
+Done!
 
 Run with 
 ```commandline
-LD_LIBRARY_PATH=/usr/local/lib64 pdf_reader -x 25 -y 35 -W 515 -H 752 file.pdf
+LD_LIBRARY_PATH=/usr/local/lib64 pdf_reader file.pdf
 ```
 
 Or in Ubuntu (look at poppler install output for more detail)
 ```commandline
-LD_LIBRARY_PATH=/usr/local/lib pdf_reader -x 25 -y 35 -W 515 -H 752 file.pdf
+LD_LIBRARY_PATH=/usr/local/lib pdf_reader file.pdf
 ```
