@@ -29,8 +29,10 @@
 // recursive
 nlohmann::json add_json_node(DocumentNode& current_node) {
     nlohmann::json json_pdf_section;
+    json_pdf_section["id"] = current_node.main_section->id;
     json_pdf_section["title"] = current_node.main_section->title;
     json_pdf_section["content"] = current_node.main_section->content;
+    json_pdf_section["parent_id"] = current_node.parent_node->main_section->id;
     for (std::string emphasized_word : current_node.main_section->emphasized_words) {
         json_pdf_section["keywords"] += emphasized_word;
     }
@@ -42,6 +44,38 @@ nlohmann::json add_json_node(DocumentNode& current_node) {
     }
 
     return json_pdf_section;
+}
+
+nlohmann::json add_json_node_list(DocumentNode& current_node) {
+    nlohmann::json json_node_list;
+    std::list<DocumentNode*> doc_node_stack;
+    doc_node_stack.push_back(&current_node);
+    unsigned int id = 0;
+    while (!doc_node_stack.empty()) {
+        // take 1 element
+        DocumentNode *current_node = doc_node_stack.back();
+        doc_node_stack.pop_back();
+
+        nlohmann::json json_pdf_section;
+        current_node->main_section->id = id++;
+        json_pdf_section["id"] = current_node->main_section->id;
+        json_pdf_section["title"] = current_node->main_section->title;
+        json_pdf_section["content"] = current_node->main_section->content;
+        for (std::string emphasized_word : current_node->main_section->emphasized_words) {
+            json_pdf_section["keywords"] += emphasized_word;
+        }
+        if (current_node->parent_node)
+            json_pdf_section["parent_id"] = current_node->parent_node->main_section->id;
+        // process
+        json_node_list.push_back(json_pdf_section);
+
+        if (current_node->sub_sections) {
+            for (DocumentNode& node : current_node->sub_sections.value()) {
+                doc_node_stack.push_back(&node);
+            }
+        }
+    }
+    return json_node_list;
 }
 
 int main(int argc, char* argv[]) {
@@ -179,6 +213,7 @@ int main(int argc, char* argv[]) {
         PDFSection root_section;
         root_section.title = file_path;
         root_section.content = "";
+        root_section.id = 0;
         DocumentNode doc_root;
         doc_root.main_section = &root_section;
         doc_root.parent_node = nullptr;
@@ -222,8 +257,20 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Save pdf_document to json file
-        nlohmann::json json_pdf_document = add_json_node(doc_root);
+//        // Indexing each session
+//        unsigned int section_index = 1;
+//        std::list<PDFSection>::iterator section_it = pdf_document.sections.begin();
+//        while (section_it != pdf_document.sections.end()) {
+//            section_it->id = section_index;
+//            section_index++;
+//            section_it++;
+//        }
+
+        // present as tree
+//        nlohmann::json json_pdf_document = add_json_node(doc_root);
+
+        // present as list
+        nlohmann::json json_pdf_document = add_json_node_list(doc_root);
 
         std::string output_file_name(std::string(argv[1]) + ".json");
         std::cout << "Writing out file to: " << output_file_name << std::endl;

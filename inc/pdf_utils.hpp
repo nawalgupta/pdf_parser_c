@@ -89,6 +89,7 @@ struct TextBlockInformation {
 };
 
 struct PDFSection {
+    unsigned int id;
     std::string title;
     TitleFormat title_format;
     std::string content;
