@@ -101,7 +101,7 @@ struct PDFDocument {
 
 struct DocumentNode {
     PDFSection* main_section;
-    std::optional<std::list<DocumentNode*>> sub_sections;
+    std::optional<std::list<DocumentNode>> sub_sections;
     DocumentNode* parent_node;
 };
 

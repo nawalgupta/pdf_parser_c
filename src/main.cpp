@@ -26,6 +26,24 @@
 #include <FontInfo.h>
 #include "pdf_utils.hpp"
 
+// recursive
+nlohmann::json add_json_node(DocumentNode& current_node) {
+    nlohmann::json json_pdf_section;
+    json_pdf_section["title"] = current_node.main_section->title;
+    json_pdf_section["content"] = current_node.main_section->content;
+    for (std::string emphasized_word : current_node.main_section->emphasized_words) {
+        json_pdf_section["keywords"] += emphasized_word;
+    }
+
+    if(current_node.sub_sections) {
+        for (DocumentNode& node : current_node.sub_sections.value()) {
+            json_pdf_section["subnodes"] += add_json_node(node);
+        }
+    }
+
+    return json_pdf_section;
+}
+
 int main(int argc, char* argv[]) {
     PDFDoc* doc;
     TextOutputDev* textOut;
@@ -62,6 +80,11 @@ int main(int argc, char* argv[]) {
         PDFDocument pdf_document;
         PDFSection pdf_section;
         bool start_parse = false;
+
+
+        /* ------------------------- print all fonts used, for testing only -------------- */
+        /*
+
         FontInfoScanner font_info_scanner(doc);
         GooList *fonts = font_info_scanner.scan(number_of_pages);
         // print the font info
@@ -88,6 +111,8 @@ int main(int argc, char* argv[]) {
           }
           delete fonts;
         }
+
+        */
 
         std::cout << "Parsing " << number_of_pages << " pages of " << argv[1] << std::endl;
 
@@ -151,34 +176,54 @@ int main(int argc, char* argv[]) {
         }
 
         // all sections in a list, construct a tree from pdf_document.sections
+        PDFSection root_section;
+        root_section.title = file_path;
+        root_section.content = "";
         DocumentNode doc_root;
-        doc_root.main_section = nullptr;
+        doc_root.main_section = &root_section;
         doc_root.parent_node = nullptr;
         std::list<TitleFormat> title_format_stack;
-        for (PDFSection section : pdf_document.sections) {
+        DocumentNode* current_node = &doc_root;
+        for (PDFSection& section : pdf_document.sections) {
             // if this section's title format hasn't appear in title_format_stack
             std::list<TitleFormat>::iterator it = std::find(title_format_stack.begin(), title_format_stack.end(), section.title_format);
 
-            if (it == title_format_stack.end()) {
-                std::cout << "Not exist " << section.title << std::endl;
-                std::cout << "Title format: " << section.title_format;
+            // create subnode
+            DocumentNode node;
+            node.main_section = &section;
+
+            if (it == title_format_stack.end()) { // not exist yet, create a subnode to add it to current node
+                // add to current node
+                if (!current_node->sub_sections) {
+                    current_node->sub_sections = std::list<DocumentNode>();
+                }
+                node.parent_node = current_node;
+                current_node->sub_sections.value().push_back(std::move(node));
+
+                current_node = &(current_node->sub_sections.value().front());
                 title_format_stack.push_back(section.title_format);
             } else {
-                std::cout << "Exist" << std::endl;
+                // Up until this title_format is the last element
+                // save the iterator
+                std::list<TitleFormat>::iterator tmp_it = it;
+                // it modified
+                while (it != title_format_stack.end()){
+                    current_node = current_node->parent_node;
+                    ++it;
+                }
+                // it = end() here
+                ++tmp_it;
+                title_format_stack.erase(tmp_it, it);
+
+                node.parent_node = current_node;
+
+                current_node->sub_sections.value().push_back(std::move(node));
+                current_node = &(current_node->sub_sections.value().back());
             }
         }
 
         // Save pdf_document to json file
-        nlohmann::json json_pdf_document;
-        for (PDFSection section : pdf_document.sections) {
-            nlohmann::json json_pdf_section;
-            json_pdf_section["title"] = section.title;
-            json_pdf_section["content"] = section.content;
-            for (std::string emphasized_word : section.emphasized_words) {
-                json_pdf_section["keywords"] += emphasized_word;
-            }
-            json_pdf_document.push_back(json_pdf_section);
-        }
+        nlohmann::json json_pdf_document = add_json_node(doc_root);
 
         std::string output_file_name(std::string(argv[1]) + ".json");
         std::cout << "Writing out file to: " << output_file_name << std::endl;
