@@ -148,6 +148,11 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                 for (int i = 0; i < word_length; ++i) {
                     std::string character = UnicodeToUTF8(*(word->getChar(i)));
 
+                    // TODO: linhlt: temporary fix
+                    if (character.compare("“") == 0 || character.compare("”") == 0) {
+                        character = "\"";
+                    }
+
                     font_info = word->getFontInfo(i);
                     if (parsing_emphasized_word) {  // just need to compare to font of previous character
                         if (font_info->gfxFont == prev_font_info->gfxFont) { // same as previous character
