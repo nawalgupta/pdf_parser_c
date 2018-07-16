@@ -7,15 +7,16 @@ pipeline {
 
   }
   stages {
-    stage('Prapare environment') {
+    stage('Packages Preparation') {
       steps {
-        git(url: 'https://github.com/robinson0812/pdf_parser_c.git', branch: 'document_tree')
-        git(url: 'https://anongit.freedesktop.org/git/poppler/poppler-data.git', branch: 'master')
-        git(url: 'https://anongit.freedesktop.org/git/poppler/test', branch: 'master')
-        git(url: 'https://anongit.freedesktop.org/git/poppler/poppler.git', branch: 'master')
-        sh '''apt -y install git
-cd poppler
-git apply ../pdf_parser_c/poppler.patch'''
+        node(label: 'docker') {
+          sh 'apt -y install git'
+          ws(dir: 'source') {
+            git(url: 'https://github.com/robinson0812/pdf_parser_c.git', branch: 'document_tree')
+          }
+
+        }
+
       }
     }
   }
