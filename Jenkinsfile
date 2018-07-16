@@ -18,9 +18,7 @@ DEBIAN_FRONTEND=noninteractive apt-get -yq install git'''
           git 'https://anongit.freedesktop.org/git/poppler/poppler.git'
           dir(path: 'poppler') {
             sh '''
-ls -la 
-ls -la ..
-git apply ../pdf_parser_c/poppler.patch'''
+ls -la;ls -la ..;git apply ../pdf_parser_c/poppler.patch'''
           }
 
         }
