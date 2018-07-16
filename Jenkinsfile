@@ -9,7 +9,8 @@ pipeline {
   stages {
     stage('Packages Preparation') {
       steps {
-        sh 'DEBIAN_FRONTEND=noninteractive apt-get -yq install git'
+        sh '''apt update
+DEBIAN_FRONTEND=noninteractive apt-get -yq install git'''
       }
     }
   }
