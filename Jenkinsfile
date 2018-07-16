@@ -9,7 +9,7 @@ pipeline {
   stages {
     stage('Packages Preparation') {
       steps {
-        sh 'git help'
+        sh 'DEBIAN_FRONTEND=noninteractive apt-get -yq install git'
       }
     }
   }
