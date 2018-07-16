@@ -1,8 +1,8 @@
 pipeline {
   agent {
     docker {
-      image 'ubuntu'
       args '-v /data:/data'
+      image 'ubuntu:16.04'
     }
 
   }
