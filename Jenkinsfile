@@ -14,7 +14,7 @@ pipeline {
         git(url: 'https://anongit.freedesktop.org/git/poppler/test', branch: 'master')
         git(url: 'https://anongit.freedesktop.org/git/poppler/poppler.git', branch: 'master')
         sh '''cd poppler
-git apply ../pdf_parser_c'''
+git apply ../pdf_parser_c/poppler.patch'''
       }
     }
   }
