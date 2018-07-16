@@ -10,6 +10,7 @@ pipeline {
     stage('Packages Preparation') {
       steps {
         ws(dir: 'source') {
+          sh 'pwd'
           sh 'mkdir poppler'
           dir(path: 'poppler') {
             sh 'pwd'
