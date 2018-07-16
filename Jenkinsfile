@@ -9,7 +9,7 @@ pipeline {
   stages {
     stage('Packages Preparation') {
       steps {
-        sh 'ls'
+        sh 'ls; pwd'
       }
     }
   }
