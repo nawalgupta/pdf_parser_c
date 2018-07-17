@@ -30,7 +30,8 @@ make install
 cd ..
 mkdir poppler
 cd poppler
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ../../poppler/poppler'''
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ../../poppler/poppler
+cmake -LA | awk \'{if(f)print} /-- Cache values/{f=1}\''''
       }
     }
   }
