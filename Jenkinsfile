@@ -16,9 +16,10 @@ cd "$HOME/source/poppler"
 git clone https://anongit.freedesktop.org/git/poppler/poppler-data.git
 git clone https://anongit.freedesktop.org/git/poppler/test
 git clone https://anongit.freedesktop.org/git/poppler/poppler.git
-git clone https://github.com/nlohmann/json.git
 cd poppler
-git apply $WORKSPACE/poppler.patch'''
+git apply $WORKSPACE/poppler.patch
+cd ..
+git clone https://github.com/nlohmann/json.git'''
         sh '''apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get -yq install cmake build-essential libfreetype6-dev libfontconfig1-dev'''
         sh '''mkdir -p $HOME/source/poppler-build-data
