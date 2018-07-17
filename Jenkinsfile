@@ -16,9 +16,7 @@ DEBIAN_FRONTEND=noninteractive apt-get -yq install git'''
           git 'https://anongit.freedesktop.org/git/poppler/poppler-data.git'
           git 'https://anongit.freedesktop.org/git/poppler/test'
           git 'https://anongit.freedesktop.org/git/poppler/poppler.git'
-          sh '''echo ${WORKSPACE}
-cd poppler
-git apply ${WORKSPACE}/poppler.patch'''
+          sh 'env'
         }
 
       }
