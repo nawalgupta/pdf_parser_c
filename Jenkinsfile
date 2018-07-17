@@ -19,7 +19,7 @@ git clone https://anongit.freedesktop.org/git/poppler/poppler.git
 cd poppler
 git apply $WORKSPACE/poppler.patch'''
         sh '''apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get -yq install cmake build-essential'''
+DEBIAN_FRONTEND=noninteractive apt-get -yq install cmake build-essential libfreetype6-dev'''
         sh '''mkdir -p $HOME/source/poppler-build
 cd "$HOME/source/poppler-build"
 mkdir poppler-data
