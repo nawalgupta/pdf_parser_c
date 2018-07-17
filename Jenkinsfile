@@ -30,7 +30,7 @@ make install
 cd ..
 mkdir poppler
 cd poppler
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ../../poppler'''
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ../../poppler/poppler'''
       }
     }
   }
