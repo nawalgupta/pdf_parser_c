@@ -3,10 +3,11 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <FontInfo.h>
 
 const double TitleFormat::INDENT_DELTA_THRESHOLD = TITLE_FORMAT_INDENT_DELTA;
 
-static inline std::string UnicodeToUTF8(Unicode codepoint) {
+inline std::string UnicodeToUTF8(Unicode codepoint) {
     std::string out;
     if (codepoint <= 0x7f)
         out.append(1, static_cast<char>(codepoint));
@@ -56,10 +57,10 @@ TitleFormat::TitleFormat() {
 
 TitleFormat::TitleFormat(const TitleFormat& other) :
     font_ref(other.font_ref),
-    numbering_level(other.numbering_level),
     title_case(other.title_case),
     prefix(other.prefix),
     emphasize_style(other.emphasize_style),
+    numbering_level(other.numbering_level),
     same_line_with_content(other.same_line_with_content),
     indent(other.indent) {
 
@@ -67,10 +68,10 @@ TitleFormat::TitleFormat(const TitleFormat& other) :
 
 TitleFormat::TitleFormat(TitleFormat&& other) :
     font_ref(other.font_ref),
-    numbering_level(other.numbering_level),
     title_case(other.title_case),
     prefix(other.prefix),
     emphasize_style(other.emphasize_style),
+    numbering_level(other.numbering_level),
     same_line_with_content(other.same_line_with_content),
     indent(other.indent) {
 
@@ -78,10 +79,10 @@ TitleFormat::TitleFormat(TitleFormat&& other) :
 
 TitleFormat& TitleFormat::operator=(const TitleFormat& other) {
     font_ref = other.font_ref;
-    numbering_level = other.numbering_level;
     title_case = other.title_case;
     prefix = other.prefix;
     emphasize_style = other.emphasize_style;
+    numbering_level = other.numbering_level;
     same_line_with_content = other.same_line_with_content;
     indent = other.indent;
     return *this;
@@ -89,10 +90,10 @@ TitleFormat& TitleFormat::operator=(const TitleFormat& other) {
 
 TitleFormat& TitleFormat::operator=(TitleFormat&& other) {
     font_ref = other.font_ref;
-    numbering_level = other.numbering_level;
     title_case = other.title_case;
     prefix = other.prefix;
     emphasize_style = other.emphasize_style;
+    numbering_level = other.numbering_level;
     same_line_with_content = other.same_line_with_content;
     indent = other.indent;
     return *this;
@@ -139,7 +140,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
         std::stringstream partial_paragraph_content_string_stream;
         std::stringstream emphasized_word_string_stream;
         bool parsing_emphasized_word = false;
-        TextFontInfo* font_info, *prev_font_info;
+        TextFontInfo* font_info, *prev_font_info = nullptr;
         std::optional<std::string> title_prefix;
         for (TextLine* line = text_block->getLines(); line; line = line->getNext()) {
             for (TextWord* word = line->getWords(); word; word = word->getNext()) {
@@ -154,7 +155,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                     }
 
                     font_info = word->getFontInfo(i);
-                    if (parsing_emphasized_word) {  // just need to compare to font of previous character
+                    if (parsing_emphasized_word && prev_font_info) {  // just need to compare to font of previous character
                         if (font_info->gfxFont == prev_font_info->gfxFont) { // same as previous character
                             emphasized_word_string_stream << character;
                         } else {
@@ -225,7 +226,7 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                 // step 1: find first word, using regex to match, check if it is bullet or numbering
                 unsigned int pos = 0;
                 std::string_view title_prefix_view(title_prefix.value());;
-                unsigned int p_length = title_prefix_view.length();
+                size_t p_length = title_prefix_view.length();
                 for (unsigned int i = 0; i < p_length; ++i) {
                     if (std::isspace(title_prefix_view[i])) {
                         pos = i;
@@ -356,8 +357,8 @@ TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool
                 }
             } else {
                 // case 2: no prefix: first emphasize word is in begining of the block, the character after first emphasized word must be colon or space
-                unsigned int pos = text_block_information->emphasized_words.front().length();
-                unsigned int p_length = text_block_information->partial_paragraph_content.length();
+                size_t pos = text_block_information->emphasized_words.front().length();
+                size_t p_length = text_block_information->partial_paragraph_content.length();
                 if (pos == p_length) {
                     TitleFormat title_format;
                     title_format.prefix = TitleFormat::PREFIX::NONE;
@@ -439,4 +440,34 @@ PDFDoc* open_pdf_document(char* file_name, char* owner_password, char* user_pass
 
 std::string parse_pdf_document(std::unique_ptr<PDFDocument> pdf_ptr) {
     return "{\"test\": \"adjalskjdalskd\"}";
+}
+
+inline void print_all_fonts(PDFDoc *doc)
+{
+    FontInfoScanner font_info_scanner(doc);
+    GooList *fonts = font_info_scanner.scan(doc->getNumPages());
+
+    printf("List fonts used:\n");
+    printf("name                                 type              encoding         emb sub uni object ID\n");
+    printf("------------------------------------ ----------------- ---------------- --- --- --- ---------\n");
+    if (fonts) {
+      for (int i = 0; i < fonts->getLength(); ++i) {
+        FontInfo *font = static_cast<FontInfo *>(fonts->get(i));
+        printf("%-36s %-17s %-16s %-3s %-3s %-3s",
+               font->getName() ? font->getName()->getCString() : "[none]",
+               fontTypeNames[font->getType()],
+               font->getEncoding()->getCString(),
+               font->getEmbedded() ? "yes" : "no",
+               font->getSubset() ? "yes" : "no",
+               font->getToUnicode() ? "yes" : "no");
+        const Ref fontRef = font->getRef();
+        if (fontRef.gen >= 100000) {
+          printf(" [none]\n");
+        } else {
+          printf(" %6d %2d\n", fontRef.num, fontRef.gen);
+        }
+        delete font;
+      }
+      delete fonts;
+    }
 }

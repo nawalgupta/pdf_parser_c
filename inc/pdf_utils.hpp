@@ -153,11 +153,13 @@ inline bool is_all_lower_case(std::string& s) {
 }
 
 // convert Unicode character to UTF-8 encoded string
-static inline std::string UnicodeToUTF8(Unicode codepoint);
+inline std::string UnicodeToUTF8(Unicode codepoint);
 
 // extract text block information from text block
 TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool analyze_page_number, double y0, unsigned int title_max_length);
 
 PDFDoc* open_pdf_document(char *file_name, char *owner_password, char *user_password);
+
+inline void print_all_fonts(PDFDoc* doc);
 
 std::string parse_pdf_document(std::unique_ptr<PDFDocument> pdf_ptr);

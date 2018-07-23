@@ -23,7 +23,6 @@
 #include <cctype>
 #include <locale>
 #include <nlohmann/json.hpp>
-#include <FontInfo.h>
 #include "pdf_utils.hpp"
 
 // recursive
@@ -82,7 +81,7 @@ int main(int argc, char* argv[]) {
     PDFDoc* doc;
     TextOutputDev* textOut;
 
-    int title_max_length = 100;
+    unsigned int title_max_length = 100;
     int page_footer_height = 60.0;
     char owner_password[33] = "\001";
     char user_password[33] = "\001";
@@ -114,39 +113,6 @@ int main(int argc, char* argv[]) {
         PDFDocument pdf_document;
         PDFSection pdf_section;
         bool start_parse = false;
-
-
-        /* ------------------------- print all fonts used, for testing only -------------- */
-        /*
-
-        FontInfoScanner font_info_scanner(doc);
-        GooList *fonts = font_info_scanner.scan(number_of_pages);
-        // print the font info
-        printf("List fonts used:\n");
-        printf("name                                 type              encoding         emb sub uni object ID\n");
-        printf("------------------------------------ ----------------- ---------------- --- --- --- ---------\n");
-        if (fonts) {
-          for (int i = 0; i < fonts->getLength(); ++i) {
-            FontInfo *font = (FontInfo *)fonts->get(i);
-            printf("%-36s %-17s %-16s %-3s %-3s %-3s",
-                   font->getName() ? font->getName()->getCString() : "[none]",
-                   fontTypeNames[font->getType()],
-                   font->getEncoding()->getCString(),
-                   font->getEmbedded() ? "yes" : "no",
-                   font->getSubset() ? "yes" : "no",
-                   font->getToUnicode() ? "yes" : "no");
-            const Ref fontRef = font->getRef();
-            if (fontRef.gen >= 100000) {
-              printf(" [none]\n");
-            } else {
-              printf(" %6d %2d\n", fontRef.num, fontRef.gen);
-            }
-            delete font;
-          }
-          delete fonts;
-        }
-
-        */
 
         std::cout << "Parsing " << number_of_pages << " pages of " << argv[1] << std::endl;
 
@@ -257,17 +223,8 @@ int main(int argc, char* argv[]) {
             }
         }
 
-//        // Indexing each session
-//        unsigned int section_index = 1;
-//        std::list<PDFSection>::iterator section_it = pdf_document.sections.begin();
-//        while (section_it != pdf_document.sections.end()) {
-//            section_it->id = section_index;
-//            section_index++;
-//            section_it++;
-//        }
-
         // present as tree
-//        nlohmann::json json_pdf_document = add_json_node(doc_root);
+        // nlohmann::json json_pdf_document = add_json_node(doc_root);
 
         // present as list
         nlohmann::json json_pdf_document = add_json_node_list(doc_root);
