@@ -578,7 +578,9 @@ std::string parse_pdf_document(PDFDoc *doc) {
 
         // all sections in a list, construct a tree from pdf_document.sections
         PDFSection root_section;
-        root_section.title = doc->getDocInfoTitle()->toStr();
+        GooString *titleString = doc->getDocInfoTitle();
+        root_section.title = titleString->toStr();
+        delete titleString;
         root_section.content = "";
         root_section.id = 0;
         DocumentNode doc_root;
