@@ -29,6 +29,7 @@
 #include <Page.h>
 #include <PDFDocFactory.h>
 #include <GfxFont.h>
+#include <nlohmann/json.hpp>
 
 #ifndef TITLE_FORMAT_INDENT_DELTA
 #define TITLE_FORMAT_INDENT_DELTA 0.2
@@ -155,6 +156,10 @@ inline bool is_all_lower_case(std::string& s) {
 // convert Unicode character to UTF-8 encoded string
 inline std::string UnicodeToUTF8(Unicode codepoint);
 
+nlohmann::json add_json_node(DocumentNode& current_node);
+
+nlohmann::json add_json_node_list(DocumentNode& current_node);
+
 // extract text block information from text block
 TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool analyze_page_number, double y0, unsigned int title_max_length);
 
@@ -162,4 +167,4 @@ PDFDoc* open_pdf_document(char *file_name, char *owner_password, char *user_pass
 
 inline void print_all_fonts(PDFDoc* doc);
 
-std::string parse_pdf_document(std::unique_ptr<PDFDocument> pdf_ptr);
+std::string parse_pdf_document(PDFDoc* doc);

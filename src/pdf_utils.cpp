@@ -110,6 +110,58 @@ std::ostream& operator<<(std::ostream& os, const TitleFormat& tf) {
     return os;
 }
 
+// recursive
+nlohmann::json add_json_node(DocumentNode& current_node) {
+    nlohmann::json json_pdf_section;
+    json_pdf_section["id"] = current_node.main_section->id;
+    json_pdf_section["title"] = current_node.main_section->title;
+    json_pdf_section["content"] = current_node.main_section->content;
+    json_pdf_section["parent_id"] = current_node.parent_node->main_section->id;
+    for (std::string emphasized_word : current_node.main_section->emphasized_words) {
+        json_pdf_section["keywords"] += emphasized_word;
+    }
+
+    if(current_node.sub_sections) {
+        for (DocumentNode& node : current_node.sub_sections.value()) {
+            json_pdf_section["subnodes"] += add_json_node(node);
+        }
+    }
+
+    return json_pdf_section;
+}
+
+nlohmann::json add_json_node_list(DocumentNode& current_node) {
+    nlohmann::json json_node_list;
+    std::list<DocumentNode*> doc_node_stack;
+    doc_node_stack.push_back(&current_node);
+    unsigned int id = 0;
+    while (!doc_node_stack.empty()) {
+        // take 1 element
+        DocumentNode *current_node = doc_node_stack.back();
+        doc_node_stack.pop_back();
+
+        nlohmann::json json_pdf_section;
+        current_node->main_section->id = id++;
+        json_pdf_section["id"] = current_node->main_section->id;
+        json_pdf_section["title"] = current_node->main_section->title;
+        json_pdf_section["content"] = current_node->main_section->content;
+        for (std::string emphasized_word : current_node->main_section->emphasized_words) {
+            json_pdf_section["keywords"] += emphasized_word;
+        }
+        if (current_node->parent_node)
+            json_pdf_section["parent_id"] = current_node->parent_node->main_section->id;
+        // process
+        json_node_list.push_back(json_pdf_section);
+
+        if (current_node->sub_sections) {
+            for (DocumentNode& node : current_node->sub_sections.value()) {
+                doc_node_stack.push_back(&node);
+            }
+        }
+    }
+    return json_node_list;
+}
+
 // extract text block information from text block
 TextBlockInformation* extract_text_block_information(TextBlock* text_block, bool analyze_page_number, double y0, unsigned int title_max_length)  {
     TextBlockInformation* text_block_information = new TextBlockInformation;
@@ -438,8 +490,155 @@ PDFDoc* open_pdf_document(char* file_name, char* owner_password, char* user_pass
     return doc;
 }
 
-std::string parse_pdf_document(std::unique_ptr<PDFDocument> pdf_ptr) {
-    return "{\"test\": \"adjalskjdalskd\"}";
+std::string parse_pdf_document(PDFDoc *doc) {
+    TextOutputDev* textOut;
+    unsigned int title_max_length = 100;
+    int page_footer_height = 60.0;
+    double resolution = 72.0;
+
+    // create text output device
+    if (doc->isOk()) {
+        textOut = new TextOutputDev(nullptr, gFalse, 0.0, gFalse, gFalse);
+    } else {
+        delete doc;
+        return "{}";
+    }
+
+    // process if textOut is ok
+    if (textOut->isOk()) {
+        globalParams = new GlobalParams();
+//        globalParams->setTextPageBreaks(gTrue);
+//        globalParams->setErrQuiet(gFalse);
+        int number_of_pages = doc->getNumPages();
+
+        PDFDocument pdf_document;
+        PDFSection pdf_section;
+        bool start_parse = false;
+
+//        std::cout << "Parsing " << number_of_pages << " pages of " << argv[1] << std::endl;
+
+        for (int page = 1; page <= number_of_pages; ++page) {
+            PDFRectangle* page_mediabox =  doc->getPage(page)->getMediaBox();
+            double y0 = page_mediabox->y2 - page_footer_height;
+            doc->displayPage(textOut, page, resolution, resolution, 0, gTrue, gFalse, gFalse);
+
+
+            TextPage* textPage = textOut->takeText();
+            std::list<TextBlockInformation*> text_block_information_list;
+
+            for (TextFlow* flow = textPage->getFlows(); flow; flow = flow->getNext()) {
+                for (TextBlock* text_block = flow->getBlocks(); text_block; text_block = text_block->getNext()) {
+
+                    // must process text_block here as it'll expire after parsing page
+                    TextBlockInformation* text_block_information = extract_text_block_information(text_block, !start_parse, y0, title_max_length);
+                    text_block_information_list.push_back(text_block_information);
+
+                    // if atleast 1 text block is page number block
+                    if (text_block_information->is_page_number) {
+                        start_parse = true; // first page that have page number
+                    }
+                }
+            }
+            textPage->decRefCnt();
+
+            // after first page which has page number
+            if (start_parse) {
+                for (TextBlockInformation* text_block_information : text_block_information_list) {
+                    // only add blocks that is not page number
+                    if (!(text_block_information->is_page_number)) {
+                        if (text_block_information->title_format) {
+                            if (pdf_section.title.length() > 0) {
+                                trim(pdf_section.content);
+                                pdf_document.sections.push_back(pdf_section);
+                            }
+
+                            pdf_section.title = text_block_information->emphasized_words.front();
+                            pdf_section.title_format = text_block_information->title_format.value();
+                            text_block_information->emphasized_words.pop_front();
+                            pdf_section.emphasized_words = text_block_information->emphasized_words;
+                            pdf_section.content = text_block_information->partial_paragraph_content;
+                        } else if (pdf_section.title.length() > 0) {
+                            pdf_section.emphasized_words.insert(pdf_section.emphasized_words.end(), text_block_information->emphasized_words.begin(), text_block_information->emphasized_words.end());
+                            pdf_section.content += text_block_information->partial_paragraph_content;
+                        }
+                    }
+                }
+            }
+
+            // cleanup
+            for (TextBlockInformation* text_block_information : text_block_information_list) {
+                delete text_block_information;
+            }
+        }
+
+        if (pdf_section.title.length() > 0) {
+            trim(pdf_section.content);
+            pdf_document.sections.push_back(pdf_section);
+        }
+
+        // all sections in a list, construct a tree from pdf_document.sections
+        PDFSection root_section;
+        root_section.title = doc->getDocInfoTitle()->toStr();
+        root_section.content = "";
+        root_section.id = 0;
+        DocumentNode doc_root;
+        doc_root.main_section = &root_section;
+        doc_root.parent_node = nullptr;
+        std::list<TitleFormat> title_format_stack;
+        DocumentNode* current_node = &doc_root;
+        for (PDFSection& section : pdf_document.sections) {
+            // if this section's title format hasn't appear in title_format_stack
+            std::list<TitleFormat>::iterator it = std::find(title_format_stack.begin(), title_format_stack.end(), section.title_format);
+
+            // create subnode
+            DocumentNode node;
+            node.main_section = &section;
+
+            if (it == title_format_stack.end()) { // not exist yet, create a subnode to add it to current node
+                // add to current node
+                if (!current_node->sub_sections) {
+                    current_node->sub_sections = std::list<DocumentNode>();
+                }
+                node.parent_node = current_node;
+                current_node->sub_sections.value().push_back(std::move(node));
+
+                current_node = &(current_node->sub_sections.value().front());
+                title_format_stack.push_back(section.title_format);
+            } else {
+                // Up until this title_format is the last element
+                // save the iterator
+                std::list<TitleFormat>::iterator tmp_it = it;
+                // it modified
+                while (it != title_format_stack.end()){
+                    current_node = current_node->parent_node;
+                    ++it;
+                }
+                // it = end() here
+                ++tmp_it;
+                title_format_stack.erase(tmp_it, it);
+
+                node.parent_node = current_node;
+
+                current_node->sub_sections.value().push_back(std::move(node));
+                current_node = &(current_node->sub_sections.value().back());
+            }
+        }
+
+        // present as tree
+        // nlohmann::json json_pdf_document = add_json_node(doc_root);
+
+        // present as list
+        nlohmann::json json_pdf_document = add_json_node_list(doc_root);
+
+        delete textOut;
+        delete doc;
+        delete globalParams;
+        return json_pdf_document.dump();
+    } else {
+        delete textOut;
+        delete doc;
+        return "{}";
+    }
 }
 
 inline void print_all_fonts(PDFDoc *doc)
